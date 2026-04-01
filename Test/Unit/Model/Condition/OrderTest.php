@@ -38,6 +38,9 @@ class OrderTest extends TestCase
     /** @var Select|MockObject */
     private $select;
 
+    /** @var Order */
+    private $order;
+
     protected function setUp(): void
     {
         $this->context = $this->createMock(Context::class);
@@ -45,19 +48,36 @@ class OrderTest extends TestCase
         $this->resourceConnection = $this->createMock(ResourceConnection::class);
         $this->connection = $this->createMock(AdapterInterface::class);
         $this->select = $this->createMock(Select::class);
-    }
-
-    public function testLoadAttributeOptionsSetsExpectedAttributes(): void
-    {
-        $order = new Order(
+        
+        // Create SUT once in setUp
+        $this->order = new Order(
             $this->context,
             $this->orderCollectionFactory,
             $this->resourceConnection
         );
-        $result = $order->loadAttributeOptions();
-        $this->assertSame($order, $result);
+    }
+
+    /**
+     * Helper to reduce DB mock boilerplate duplication
+     */
+    private function setupDbMock(array $fetchRowResult): void
+    {
+        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
+        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
+        $this->connection->method('select')->willReturn($this->select);
+        $this->connection->method('fetchRow')->willReturn($fetchRowResult);
+
+        $this->select->method('from')->willReturnSelf();
+        $this->select->method('columns')->willReturnSelf();
+        $this->select->method('where')->willReturnSelf();
+    }
+
+    public function testLoadAttributeOptionsSetsExpectedAttributes(): void
+    {
+        $result = $this->order->loadAttributeOptions();
+        $this->assertSame($this->order, $result);
         
-        $options = $order->getAttributeOption();
+        $options = $this->order->getAttributeOption();
         $this->assertIsArray($options);
         $this->assertArrayHasKey('total_orders', $options);
         $this->assertArrayHasKey('total_revenue', $options);
@@ -69,134 +89,74 @@ class OrderTest extends TestCase
 
     public function testGetInputTypeReturnsNumericForTotalOrders(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $this->assertEquals('numeric', $order->getInputType());
+        $this->order->setAttribute('total_orders');
+        $this->assertEquals('numeric', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsNumericForTotalItems(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_items');
-        $this->assertEquals('numeric', $order->getInputType());
+        $this->order->setAttribute('total_items');
+        $this->assertEquals('numeric', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsPriceForTotalRevenue(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_revenue');
-        $this->assertEquals('price', $order->getInputType());
+        $this->order->setAttribute('total_revenue');
+        $this->assertEquals('price', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsPriceForAverageOrderValue(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('average_order_value');
-        $this->assertEquals('price', $order->getInputType());
+        $this->order->setAttribute('average_order_value');
+        $this->assertEquals('price', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsDateForFirstOrderDate(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('first_order_date');
-        $this->assertEquals('date', $order->getInputType());
+        $this->order->setAttribute('first_order_date');
+        $this->assertEquals('date', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsDateForLastOrderDate(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('last_order_date');
-        $this->assertEquals('date', $order->getInputType());
+        $this->order->setAttribute('last_order_date');
+        $this->assertEquals('date', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsSelectForPaymentMethod(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('payment_method');
-        $this->assertEquals('select', $order->getInputType());
+        $this->order->setAttribute('payment_method');
+        $this->assertEquals('select', $this->order->getInputType());
     }
 
     public function testGetInputTypeReturnsStringForDefault(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('used_coupon');
-        $this->assertEquals('string', $order->getInputType());
+        $this->order->setAttribute('used_coupon');
+        $this->assertEquals('string', $this->order->getInputType());
     }
 
     public function testGetValueElementTypeReturnsTextForNumeric(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $this->assertEquals('text', $order->getValueElementType());
+        $this->order->setAttribute('total_orders');
+        $this->assertEquals('text', $this->order->getValueElementType());
     }
 
     public function testGetValueElementTypeReturnsDateForDateAttribute(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('first_order_date');
-        $this->assertEquals('date', $order->getValueElementType());
+        $this->order->setAttribute('first_order_date');
+        $this->assertEquals('date', $this->order->getValueElementType());
     }
 
     public function testGetValueElementTypeReturnsSelectForSelectAttributes(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('payment_method');
-        $this->assertEquals('select', $order->getValueElementType());
+        $this->order->setAttribute('payment_method');
+        $this->assertEquals('select', $this->order->getValueElementType());
     }
 
     public function testGetDefaultOperatorOptionsForNumeric(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $operators = $order->getDefaultOperatorOptions();
+        $this->order->setAttribute('total_orders');
+        $operators = $this->order->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -208,13 +168,8 @@ class OrderTest extends TestCase
 
     public function testGetDefaultOperatorOptionsForDate(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('first_order_date');
-        $operators = $order->getDefaultOperatorOptions();
+        $this->order->setAttribute('first_order_date');
+        $operators = $this->order->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -224,13 +179,8 @@ class OrderTest extends TestCase
 
     public function testGetDefaultOperatorOptionsForSelect(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('payment_method');
-        $operators = $order->getDefaultOperatorOptions();
+        $this->order->setAttribute('payment_method');
+        $operators = $this->order->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -240,28 +190,16 @@ class OrderTest extends TestCase
 
     public function testValidateWithNumericCustomerId(): void
     {
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn([
+        $this->setupDbMock([
             'total_orders' => 5,
             'total_revenue' => 1000,
         ]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        $this->order->setAttribute('total_orders');
+        $this->order->setOperator('>');
+        $this->order->setValue(3);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $order->setOperator('>');
-        $order->setValue(3);
-
-        $result = $order->validate(1);
+        $result = $this->order->validate(1);
         $this->assertTrue($result);
     }
 
@@ -270,135 +208,68 @@ class OrderTest extends TestCase
         $customerModel = $this->createMock(\Magento\Customer\Model\Customer::class);
         $customerModel->method('getId')->willReturn(1);
 
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn([
-            'total_revenue' => 150.00,
-        ]);
+        $this->setupDbMock(['total_revenue' => 150.00]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        $this->order->setAttribute('total_revenue');
+        $this->order->setOperator('>=');
+        $this->order->setValue(100);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_revenue');
-        $order->setOperator('>=');
-        $order->setValue(100);
-
-        $result = $order->validate($customerModel);
+        $result = $this->order->validate($customerModel);
         $this->assertTrue($result);
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        
-        $result = $order->validate('not-a-valid-customer');
+        $result = $this->order->validate('not-a-valid-customer');
         $this->assertFalse($result);
     }
 
     public function testValidateReturnsFalseWhenNoOrders(): void
     {
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn([]);
+        $this->setupDbMock([]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        // Test with non-total_orders attribute to trigger early return
+        $this->order->setAttribute('total_revenue');
+        $this->order->setOperator('>');
+        $this->order->setValue(0);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $order->setOperator('>');
-        $order->setValue(0);
-
-        $result = $order->validate(1);
+        $result = $this->order->validate(1);
         $this->assertFalse($result);
     }
 
     public function testValidateWithTotalOrdersAttribute(): void
     {
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn(['total_orders' => 5]);
+        $this->setupDbMock(['total_orders' => 5]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        $this->order->setAttribute('total_orders');
+        $this->order->setOperator('==');
+        $this->order->setValue(5);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $order->setOperator('==');
-        $order->setValue(5);
-
-        $result = $order->validate(1);
+        $result = $this->order->validate(1);
         $this->assertTrue($result);
     }
 
     public function testValidateWithTotalRevenueAttribute(): void
     {
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn(['total_revenue' => 1000.50]);
+        $this->setupDbMock(['total_revenue' => 1000.50]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        $this->order->setAttribute('total_revenue');
+        $this->order->setOperator('>=');
+        $this->order->setValue(500);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_revenue');
-        $order->setOperator('>=');
-        $order->setValue(500);
-
-        $result = $order->validate(1);
+        $result = $this->order->validate(1);
         $this->assertTrue($result);
     }
 
     public function testValidateReturnsFalseForNullValue(): void
     {
-        $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
-        $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn(['total_orders' => null]);
+        $this->setupDbMock(['total_orders' => null]);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        $this->order->setAttribute('total_orders');
+        $this->order->setOperator('>');
+        $this->order->setValue(0);
 
-        $order = new Order(
-            $this->context,
-            $this->orderCollectionFactory,
-            $this->resourceConnection
-        );
-        $order->setAttribute('total_orders');
-        $order->setOperator('>');
-        $order->setValue(0);
-
-        $result = $order->validate(1);
+        $result = $this->order->validate(1);
         $this->assertFalse($result);
     }
 }
