@@ -466,9 +466,14 @@ class SegmentManagementTest extends TestCase
 
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
-        $segment->method('getConditionsSerialized')->willReturn('{}');
+        $segment->method('getConditionsSerialized')->willReturn('{"aggregator":"all","value":true}');
 
         $this->segmentRepository->method('getById')->willReturn($segment);
+
+        // Mock jsonSerializer to return proper condition array
+        $this->jsonSerializer->method('unserialize')
+            ->with('{"aggregator":"all","value":true}')
+            ->willReturn(['aggregator' => 'all', 'value' => true]);
 
         $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
         $combine->method('validate')->willReturn(true);
@@ -509,6 +514,8 @@ class SegmentManagementTest extends TestCase
         $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
         $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
         $collection->method('count')->willReturn(1);
+        $collection->method('addAttributeToSelect')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
@@ -547,6 +554,8 @@ class SegmentManagementTest extends TestCase
         $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
         $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
         $collection->method('count')->willReturn(1);
+        $collection->method('addAttributeToSelect')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
@@ -585,6 +594,8 @@ class SegmentManagementTest extends TestCase
         $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
         $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
         $collection->method('count')->willReturn(1);
+        $collection->method('addAttributeToSelect')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
@@ -635,13 +646,15 @@ class SegmentManagementTest extends TestCase
         $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
         $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
         $collection->method('count')->willReturn(1);
+        $collection->method('addAttributeToSelect')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
         $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
 
         // Verify the CSV properly escapes special characters (quotes doubled, commas handled)
-        $this->assertStringContainsString('Doe, Jr.', $result);
+        $this->assertStringContainsString('"Doe, Jr."', $result); // Field with comma is quoted
         $this->assertStringContainsString('John""Smith', $result); // Quotes are escaped as doubled quotes
     }
 }

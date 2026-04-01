@@ -38,26 +38,31 @@ class CustomerTest extends TestCase
     /** @var EavConfig|MockObject */
     private $eavConfig;
 
+    /** @var Customer */
+    private $customer;
+
     protected function setUp(): void
     {
         $this->context = $this->createMock(Context::class);
         $this->customerCollectionFactory = $this->createMock(CustomerCollectionFactory::class);
         $this->storeManager = $this->createMock(StoreManagerInterface::class);
         $this->eavConfig = $this->createMock(EavConfig::class);
-    }
-
-    public function testLoadAttributeOptionsSetsExpectedAttributes(): void
-    {
-        $customer = new Customer(
+        
+        // Create SUT once in setUp to eliminate duplication
+        $this->customer = new Customer(
             $this->context,
             $this->customerCollectionFactory,
             $this->storeManager,
             $this->eavConfig
         );
-        $result = $customer->loadAttributeOptions();
-        $this->assertSame($customer, $result);
+    }
+
+    public function testLoadAttributeOptionsSetsExpectedAttributes(): void
+    {
+        $result = $this->customer->loadAttributeOptions();
+        $this->assertSame($this->customer, $result);
         
-        $options = $customer->getAttributeOption();
+        $options = $this->customer->getAttributeOption();
         $this->assertIsArray($options);
         $this->assertArrayHasKey('email', $options);
         $this->assertArrayHasKey('firstname', $options);
@@ -73,110 +78,56 @@ class CustomerTest extends TestCase
 
     public function testGetInputTypeReturnsDateForDob(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('dob');
-        $this->assertEquals('date', $customer->getInputType());
+        $this->customer->setAttribute('dob');
+        $this->assertEquals('date', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsDateForCreatedAt(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('created_at');
-        $this->assertEquals('date', $customer->getInputType());
+        $this->customer->setAttribute('created_at');
+        $this->assertEquals('date', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsSelectForWebsiteId(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('website_id');
-        $this->assertEquals('select', $customer->getInputType());
+        $this->customer->setAttribute('website_id');
+        $this->assertEquals('select', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsSelectForStoreId(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('store_id');
-        $this->assertEquals('select', $customer->getInputType());
+        $this->customer->setAttribute('store_id');
+        $this->assertEquals('select', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsSelectForGroupId(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('group_id');
-        $this->assertEquals('select', $customer->getInputType());
+        $this->customer->setAttribute('group_id');
+        $this->assertEquals('select', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsSelectForGender(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('gender');
-        $this->assertEquals('select', $customer->getInputType());
+        $this->customer->setAttribute('gender');
+        $this->assertEquals('select', $this->customer->getInputType());
     }
 
     public function testGetInputTypeReturnsStringForDefault(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $this->assertEquals('string', $customer->getInputType());
+        $this->customer->setAttribute('email');
+        $this->assertEquals('string', $this->customer->getInputType());
     }
 
     public function testGetValueElementTypeReturnsDateForDob(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('dob');
-        $this->assertEquals('date', $customer->getValueElementType());
+        $this->customer->setAttribute('dob');
+        $this->assertEquals('date', $this->customer->getValueElementType());
     }
 
     public function testGetValueElementTypeReturnsTextForDefault(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $this->assertEquals('text', $customer->getValueElementType());
+        $this->customer->setAttribute('email');
+        $this->assertEquals('text', $this->customer->getValueElementType());
     }
 
     public function testGetValueSelectOptionsReturnsWebsitesForWebsiteId(): void
@@ -187,14 +138,8 @@ class CustomerTest extends TestCase
 
         $this->storeManager->method('getWebsites')->willReturn([$website]);
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('website_id');
-        $options = $customer->getValueSelectOptions();
+        $this->customer->setAttribute('website_id');
+        $options = $this->customer->getValueSelectOptions();
         
         $this->assertIsArray($options);
         $this->assertCount(1, $options);
@@ -210,14 +155,8 @@ class CustomerTest extends TestCase
 
         $this->storeManager->method('getStores')->willReturn([$store]);
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('store_id');
-        $options = $customer->getValueSelectOptions();
+        $this->customer->setAttribute('store_id');
+        $options = $this->customer->getValueSelectOptions();
         
         $this->assertIsArray($options);
         $this->assertCount(1, $options);
@@ -227,14 +166,8 @@ class CustomerTest extends TestCase
 
     public function testGetValueSelectOptionsReturnsEmptyForUnsupportedAttribute(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $options = $customer->getValueSelectOptions();
+        $this->customer->setAttribute('email');
+        $options = $this->customer->getValueSelectOptions();
         
         $this->assertIsArray($options);
         $this->assertEmpty($options);
@@ -242,14 +175,8 @@ class CustomerTest extends TestCase
 
     public function testGetDefaultOperatorOptionsForDate(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('dob');
-        $operators = $customer->getDefaultOperatorOptions();
+        $this->customer->setAttribute('dob');
+        $operators = $this->customer->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -261,14 +188,8 @@ class CustomerTest extends TestCase
 
     public function testGetDefaultOperatorOptionsForSelect(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('website_id');
-        $operators = $customer->getDefaultOperatorOptions();
+        $this->customer->setAttribute('website_id');
+        $operators = $this->customer->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -278,14 +199,8 @@ class CustomerTest extends TestCase
 
     public function testGetDefaultOperatorOptionsForString(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $operators = $customer->getDefaultOperatorOptions();
+        $this->customer->setAttribute('email');
+        $operators = $this->customer->getDefaultOperatorOptions();
         
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
@@ -304,17 +219,11 @@ class CustomerTest extends TestCase
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $customer->setOperator('==');
-        $customer->setValue('test@example.com');
+        $this->customer->setAttribute('email');
+        $this->customer->setOperator('==');
+        $this->customer->setValue('test@example.com');
 
-        $result = $customer->validate(1);
+        $result = $this->customer->validate(1);
         $this->assertTrue($result);
     }
 
@@ -330,30 +239,17 @@ class CustomerTest extends TestCase
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $customer->setOperator('==');
-        $customer->setValue('test@example.com');
+        $this->customer->setAttribute('email');
+        $this->customer->setOperator('==');
+        $this->customer->setValue('test@example.com');
 
-        $result = $customer->validate($customerModel);
+        $result = $this->customer->validate($customerModel);
         $this->assertTrue($result);
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        
-        $result = $customer->validate('not-a-valid-customer');
+        $result = $this->customer->validate('not-a-valid-customer');
         $this->assertFalse($result);
     }
 
@@ -366,17 +262,11 @@ class CustomerTest extends TestCase
 
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        $customer->setAttribute('email');
-        $customer->setOperator('==');
-        $customer->setValue('nonexistent@example.com');
+        $this->customer->setAttribute('email');
+        $this->customer->setOperator('==');
+        $this->customer->setValue('nonexistent@example.com');
 
-        $result = $customer->validate(1);
+        $result = $this->customer->validate(1);
         $this->assertFalse($result);
     }
 
@@ -385,16 +275,9 @@ class CustomerTest extends TestCase
         $this->eavConfig->method('getEntityType')
             ->willThrowException(new LocalizedException(__('EAV Error')));
 
-        $customer = new Customer(
-            $this->context,
-            $this->customerCollectionFactory,
-            $this->storeManager,
-            $this->eavConfig
-        );
-        
         // Should not throw exception
-        $customer->setAttribute('group_id');
-        $options = $customer->getValueSelectOptions();
+        $this->customer->setAttribute('group_id');
+        $options = $this->customer->getValueSelectOptions();
         $this->assertIsArray($options);
     }
 }
