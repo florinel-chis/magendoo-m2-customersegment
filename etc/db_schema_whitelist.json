@@ -1,0 +1,60 @@
+{
+    "magendoo_customer_segment": {
+        "column": {
+            "segment_id": true,
+            "name": true,
+            "description": true,
+            "is_active": true,
+            "conditions_serialized": true,
+            "refresh_mode": true,
+            "cron_expression": true,
+            "customer_count": true,
+            "last_refreshed": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "index": {
+            "MAGENDOO_CUSTOMER_SEGMENT_IS_ACTIVE": true,
+            "MAGENDOO_CUSTOMER_SEGMENT_REFRESH_MODE": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "magendoo_customer_segment_customer": {
+        "column": {
+            "id": true,
+            "segment_id": true,
+            "customer_id": true,
+            "assigned_at": true
+        },
+        "index": {
+            "MAGENDOO_CUSTOMER_SEGMENT_CUSTOMER_SEGMENT_ID": true,
+            "MAGENDOO_CUSTOMER_SEGMENT_CUSTOMER_CUSTOMER_ID": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "MAGENDOO_CUSTOMER_SEGMENT_CUSTOMER_SEGMENT_ID_CUSTOMER_ID": true,
+            "FK_38387B17B5970F704DF2CC9F26D519BB": true,
+            "MAGENDOO_CSTR_SEGMENT_CSTR_CSTR_ID_CSTR_ENTT_ENTT_ID": true
+        }
+    },
+    "magendoo_customer_segment_log": {
+        "column": {
+            "log_id": true,
+            "segment_id": true,
+            "action": true,
+            "details": true,
+            "created_at": true
+        },
+        "index": {
+            "MAGENDOO_CUSTOMER_SEGMENT_LOG_SEGMENT_ID": true,
+            "MAGENDOO_CUSTOMER_SEGMENT_LOG_ACTION": true,
+            "MAGENDOO_CUSTOMER_SEGMENT_LOG_CREATED_AT": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "FK_5C55A06134907E8D937E880DB9F66629": true
+        }
+    }
+}
