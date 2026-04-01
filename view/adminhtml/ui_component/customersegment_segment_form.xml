@@ -23,6 +23,7 @@
             <button name="save" class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\SaveButton"/>
             <button name="delete" class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\DeleteButton"/>
             <button name="back" class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\BackButton"/>
+            <button name="refresh" class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\RefreshButton"/>
         </buttons>
         <namespace>customersegment_segment_form</namespace>
         <dataScope>data</dataScope>
