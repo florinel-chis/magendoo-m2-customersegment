@@ -31,6 +31,16 @@ class NewConditionHtml extends Action implements HttpPostActionInterface
     public const ADMIN_RESOURCE = 'Magendoo_CustomerSegment::segment_edit';
 
     /**
+     * Allowlist of permitted condition types to prevent arbitrary class instantiation
+     */
+    private const ALLOWED_CONDITION_TYPES = [
+        \Magendoo\CustomerSegment\Model\Condition\Combine::class,
+        \Magendoo\CustomerSegment\Model\Condition\Customer::class,
+        \Magendoo\CustomerSegment\Model\Condition\Order::class,
+        \Magendoo\CustomerSegment\Model\Condition\Cart::class,
+    ];
+
+    /**
      * @var RawFactory
      */
     protected RawFactory $resultRawFactory;
@@ -70,8 +80,8 @@ class NewConditionHtml extends Action implements HttpPostActionInterface
         );
         $type = $typeArray[0];
 
-        // Validate the condition type implements ConditionInterface
-        if ($type && class_exists($type) && !in_array(ConditionInterface::class, class_implements($type))) {
+        // Security: Validate against allowlist to prevent arbitrary class instantiation
+        if (!$type || !in_array($type, self::ALLOWED_CONDITION_TYPES, true)) {
             $html = '';
             $this->getResponse()->setBody($html);
             return $this->resultRawFactory->create()->setContents($html);
