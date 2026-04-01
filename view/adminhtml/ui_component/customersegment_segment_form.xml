@@ -181,4 +181,16 @@
             <block name="segment.conditions" class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\Conditions"/>
         </htmlContent>
     </fieldset>
+    
+    <fieldset name="matched_customers">
+        <settings>
+            <label translate="true">Matched Customers</label>
+            <collapsible>true</collapsible>
+            <opened>false</opened>
+        </settings>
+        <htmlContent name="matched_customers_content">
+            <block name="segment.matched_customers" 
+                   class="Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\MatchedCustomers"/>
+        </htmlContent>
+    </fieldset>
 </form>

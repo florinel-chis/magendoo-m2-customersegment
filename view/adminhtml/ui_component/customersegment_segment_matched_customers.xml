@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Magendoo CustomerSegment Matched Customers Listing UI Component
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<listing xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+    <argument name="data" xsi:type="array">
+        <item name="js_config" xsi:type="array">
+            <item name="provider" xsi:type="string">customersegment_segment_matched_customers.matched_customers_data_source</item>
+        </item>
+    </argument>
+    <settings>
+        <spinner>matched_customers_columns</spinner>
+        <deps>
+            <dep>customersegment_segment_matched_customers.matched_customers_data_source</dep>
+        </deps>
+    </settings>
+    <dataSource name="matched_customers_data_source" component="Magento_Ui/js/grid/provider">
+        <settings>
+            <storageConfig>
+                <param name="indexField" xsi:type="string">customer_id</param>
+            </storageConfig>
+            <updateUrl path="mui/index/render"/>
+        </settings>
+        <dataProvider class="Magendoo\CustomerSegment\Ui\DataProvider\Form\MatchedCustomersDataProvider"
+                      name="matched_customers_data_source">
+            <settings>
+                <requestFieldName>segment_id</requestFieldName>
+                <primaryFieldName>customer_id</primaryFieldName>
+            </settings>
+        </dataProvider>
+    </dataSource>
+    <columns name="matched_customers_columns">
+        <column name="customer_id" class="Magento\Customer\Ui\Component\Listing\Column\CustomerId">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">ID</label>
+                <sorting>asc</sorting>
+            </settings>
+        </column>
+        <column name="name">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Name</label>
+            </settings>
+        </column>
+        <column name="email">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Email</label>
+            </settings>
+        </column>
+        <column name="billing_city">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">City</label>
+                <visible>false</visible>
+            </settings>
+        </column>
+        <column name="billing_region">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Region</label>
+                <visible>false</visible>
+            </settings>
+        </column>
+        <column name="billing_country_id">
+            <settings>
+                <filter>select</filter>
+                <options class="Magento\Config\Model\Config\Source\Locale\Country"/>
+                <label translate="true">Country</label>
+            </settings>
+        </column>
+        <column name="created_at" class="Magento\Ui\Component\Listing\Columns\Date">
+            <settings>
+                <filter>dateRange</filter>
+                <dataType>date</dataType>
+                <label translate="true">Customer Since</label>
+            </settings>
+        </column>
+    </columns>
+    <paging name="listing_paging">
+        <settings>
+            <options>
+                <option name="20" xsi:type="number">20</option>
+                <option name="50" xsi:type="number">50</option>
+                <option name="100" xsi:type="number">100</option>
+            </options>
+            <pageSize>20</pageSize>
+        </settings>
+    </paging>
+</listing>

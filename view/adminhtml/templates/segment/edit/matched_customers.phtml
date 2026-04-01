@@ -1,0 +1,64 @@
+<?php
+/**
+ * Magendoo CustomerSegment Matched Customers Template
+ *
+ * @var $block \Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\MatchedCustomers
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+?>
+<div class="admin__data-grid-wrap">
+    <?php if (!$block->hasSegmentId()) : ?>
+        <div class="message message-notice">
+            <?= $escaper->escapeHtml(__('Please save the segment first to see matched customers.')) ?>
+        </div>
+    <?php else : ?>
+        <?php $customers = $block->getCustomers(); ?>
+        
+        <?php if (empty($customers)) : ?>
+            <div class="message message-notice">
+                <?= $escaper->escapeHtml(__('No customers currently match this segment criteria.')) ?>
+                <?= $escaper->escapeHtml(__('Try refreshing the segment or adjusting the conditions.')) ?>
+            </div>
+        <?php else : ?>
+            <div class="admin__data-grid-header-row">
+                <span class="admin__data-grid-header-row-info">
+                    <?= $escaper->escapeHtml(__('Total Records: %1', $block->getCustomerCount())) ?>
+                </span>
+            </div>
+            
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('ID')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('Name')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('Email')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('City')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('Region')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('Country')) ?></th>
+                        <th class="data-grid-th"><?= $escaper->escapeHtml(__('Customer Since')) ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($customers as $customer) : ?>
+                        <tr>
+                            <td data-column="id">
+                                <a href="<?= $escaper->escapeUrl($block->getCustomerUrl($customer['id'])) ?>">
+                                    <?= $escaper->escapeHtml($customer['id']) ?>
+                                </a>
+                            </td>
+                            <td data-column="name"><?= $escaper->escapeHtml($customer['name']) ?></td>
+                            <td data-column="email"><?= $escaper->escapeHtml($customer['email']) ?></td>
+                            <td data-column="city"><?= $escaper->escapeHtml($customer['city']) ?></td>
+                            <td data-column="region"><?= $escaper->escapeHtml($customer['region']) ?></td>
+                            <td data-column="country"><?= $escaper->escapeHtml($customer['country']) ?></td>
+                            <td data-column="created_at"><?= $escaper->escapeHtml($customer['created_at']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
