@@ -478,20 +478,32 @@ class SegmentManagement implements SegmentManagementInterface
      */
     protected function exportAsCsv($collection): string
     {
-        $output = "Customer ID,Email,First Name,Last Name,Created At\n";
+        // Security: Use php://temp with fputcsv() to prevent CSV injection
+        $fp = fopen('php://temp', 'w+');
+        if ($fp === false) {
+            return '';
+        }
 
+        // Write header
+        fputcsv($fp, ['Customer ID', 'Email', 'First Name', 'Last Name', 'Created At']);
+
+        // Write data rows
         foreach ($collection as $customer) {
-            $output .= sprintf(
-                "%d,\"%s\",\"%s\",\"%s\",\"%s\"\n",
+            fputcsv($fp, [
                 $customer->getId(),
                 $customer->getEmail(),
                 $customer->getFirstname(),
                 $customer->getLastname(),
                 $customer->getCreatedAt()
-            );
+            ]);
         }
 
-        return $output;
+        // Get the content
+        rewind($fp);
+        $output = stream_get_contents($fp);
+        fclose($fp);
+
+        return $output !== false ? $output : '';
     }
 
     /**
