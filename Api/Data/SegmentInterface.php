@@ -203,4 +203,19 @@ interface SegmentInterface extends ExtensibleDataInterface
      * @return $this
      */
     public function setUpdatedAt(?string $updatedAt): static;
+
+    /**
+     * Get extension attributes
+     *
+     * @return \Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface|null
+     */
+    public function getExtensionAttributes(): ?\Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface;
+
+    /**
+     * Set extension attributes
+     *
+     * @param \Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface $extensionAttributes
+     * @return $this
+     */
+    public function setExtensionAttributes(\Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface $extensionAttributes): static;
 }
