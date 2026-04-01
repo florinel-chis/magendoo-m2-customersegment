@@ -16,20 +16,15 @@ use Magento\Checkout\Model\Session as CheckoutSession;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Select;
-use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
-use Magento\Framework\View\Asset\Repository as AssetRepo;
-use Magento\Framework\View\LayoutInterface;
 use Magento\Quote\Model\ResourceModel\Quote\CollectionFactory as QuoteCollectionFactory;
 use Magento\Rule\Model\Condition\Context;
-use Magento\Rule\Model\ConditionFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 use Magendoo\CustomerSegment\Model\Condition\Cart;
 
 class CartTest extends TestCase
 {
-    /** @var Context */
+    /** @var Context|MockObject */
     private $context;
 
     /** @var QuoteCollectionFactory|MockObject */
@@ -49,15 +44,7 @@ class CartTest extends TestCase
 
     protected function setUp(): void
     {
-        // Create full Context with all required dependencies
-        $assetRepo = $this->createMock(AssetRepo::class);
-        $localeDate = $this->createMock(TimezoneInterface::class);
-        $localeDate->method('getConfigTimezone')->willReturn('UTC');
-        $layout = $this->createMock(LayoutInterface::class);
-        $conditionFactory = $this->createMock(ConditionFactory::class);
-        $logger = $this->createMock(LoggerInterface::class);
-
-        $this->context = new Context($assetRepo, $localeDate, $layout, $conditionFactory, $logger);
+        $this->context = $this->createMock(Context::class);
         $this->quoteCollectionFactory = $this->createMock(QuoteCollectionFactory::class);
         $this->resourceConnection = $this->createMock(ResourceConnection::class);
         $this->checkoutSession = $this->createMock(CheckoutSession::class);

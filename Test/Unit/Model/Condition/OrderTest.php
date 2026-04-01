@@ -15,15 +15,10 @@ namespace Magendoo\CustomerSegment\Test\Unit\Model\Condition;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Select;
-use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
-use Magento\Framework\View\Asset\Repository as AssetRepo;
-use Magento\Framework\View\LayoutInterface;
 use Magento\Rule\Model\Condition\Context;
-use Magento\Rule\Model\ConditionFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 use Magendoo\CustomerSegment\Model\Condition\Order;
 
 class OrderTest extends TestCase
@@ -45,15 +40,7 @@ class OrderTest extends TestCase
 
     protected function setUp(): void
     {
-        // Create full Context mock with all required dependencies
-        $assetRepo = $this->createMock(AssetRepo::class);
-        $localeDate = $this->createMock(TimezoneInterface::class);
-        $localeDate->method('getConfigTimezone')->willReturn('UTC');
-        $layout = $this->createMock(LayoutInterface::class);
-        $conditionFactory = $this->createMock(ConditionFactory::class);
-        $logger = $this->createMock(LoggerInterface::class);
-
-        $this->context = new Context($assetRepo, $localeDate, $layout, $conditionFactory, $logger);
+        $this->context = $this->createMock(Context::class);
         $this->orderCollectionFactory = $this->createMock(OrderCollectionFactory::class);
         $this->resourceConnection = $this->createMock(ResourceConnection::class);
         $this->connection = $this->createMock(AdapterInterface::class);
