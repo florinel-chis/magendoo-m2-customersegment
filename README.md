@@ -279,6 +279,6 @@ Developed by Magendoo (https://magendoo.com)
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 1.0.1  
 **Compatibility**: Magento 2.4.x  
 **PHP Version**: 8.1+
