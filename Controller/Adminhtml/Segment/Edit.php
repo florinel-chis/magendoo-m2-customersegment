@@ -17,7 +17,7 @@ use Magento\Backend\App\Action\Context;
 use Magento\Framework\App\Action\HttpGetActionInterface;
 use Magento\Framework\Controller\ResultFactory;
 use Magento\Framework\Exception\NoSuchEntityException;
-use Magento\Framework\Registry;
+use Magento\Framework\App\Request\DataPersistorInterface;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
 use Magendoo\CustomerSegment\Model\SegmentFactory;
 
@@ -37,9 +37,9 @@ class Edit extends Action implements HttpGetActionInterface
     protected SegmentRepositoryInterface $segmentRepository;
 
     /**
-     * @var Registry
+     * @var DataPersistorInterface
      */
-    protected Registry $coreRegistry;
+    protected DataPersistorInterface $dataPersistor;
 
     /**
      * @var SegmentFactory
@@ -49,17 +49,17 @@ class Edit extends Action implements HttpGetActionInterface
     /**
      * @param Context $context
      * @param SegmentRepositoryInterface $segmentRepository
-     * @param Registry $coreRegistry
+     * @param DataPersistorInterface $dataPersistor
      * @param SegmentFactory $segmentFactory
      */
     public function __construct(
         Context $context,
         SegmentRepositoryInterface $segmentRepository,
-        Registry $coreRegistry,
+        DataPersistorInterface $dataPersistor,
         SegmentFactory $segmentFactory
     ) {
         $this->segmentRepository = $segmentRepository;
-        $this->coreRegistry = $coreRegistry;
+        $this->dataPersistor = $dataPersistor;
         $this->segmentFactory = $segmentFactory;
         parent::__construct($context);
     }
@@ -88,8 +88,8 @@ class Edit extends Action implements HttpGetActionInterface
             $pageTitle = __('New Segment');
         }
 
-        // Register segment for conditions block
-        $this->coreRegistry->register('current_segment', $segment);
+        // Store segment in DataPersistor for blocks to access
+        $this->dataPersistor->set('current_segment', $segment);
 
         // Configure conditions form for editing (like SalesRule does)
         if ($segment->getId()) {
