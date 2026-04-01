@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Magendoo\CustomerSegment\Model\Condition;
 
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Sql\Expression;
 use Magento\Rule\Model\Condition\AbstractCondition;
 use Magento\Rule\Model\Condition\Context;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
@@ -209,12 +210,12 @@ class Order extends AbstractCondition
             ->from(
                 $orderTable,
                 [
-                    'total_orders' => new \Zend_Db_Expr('COUNT(*)'),
-                    'total_revenue' => new \Zend_Db_Expr('SUM(base_grand_total)'),
-                    'average_order_value' => new \Zend_Db_Expr('AVG(base_grand_total)'),
-                    'total_items' => new \Zend_Db_Expr('SUM(total_qty_ordered)'),
-                    'first_order_date' => new \Zend_Db_Expr('MIN(created_at)'),
-                    'last_order_date' => new \Zend_Db_Expr('MAX(created_at)'),
+                    'total_orders' => new Expression('COUNT(*)'),
+                    'total_revenue' => new Expression('SUM(base_grand_total)'),
+                    'average_order_value' => new Expression('AVG(base_grand_total)'),
+                    'total_items' => new Expression('SUM(total_qty_ordered)'),
+                    'first_order_date' => new Expression('MIN(created_at)'),
+                    'last_order_date' => new Expression('MAX(created_at)'),
                 ]
             )
             ->where('customer_id = ?', $customerId)
