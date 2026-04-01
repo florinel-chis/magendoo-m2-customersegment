@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Default Configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <customersegment>
+            <general>
+                <enabled>1</enabled>
+                <default_refresh_mode>manual</default_refresh_mode>
+                <cron_schedule>0 2 * * *</cron_schedule>
+            </general>
+        </customersegment>
+    </default>
+</config>

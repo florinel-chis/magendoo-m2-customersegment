@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment System Configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="customersegment" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
+            <label>Customer Segments</label>
+            <tab>customer</tab>
+            <resource>Magendoo_CustomerSegment::config</resource>
+            <group id="general" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>General Settings</label>
+                <field id="enabled" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Customer Segments</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Enable or disable the customer segmentation feature</comment>
+                </field>
+                <field id="default_refresh_mode" translate="label" type="select" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Default Refresh Mode</label>
+                    <source_model>Magendoo\CustomerSegment\Model\Source\RefreshMode</source_model>
+                    <comment>Default refresh mode for new segments</comment>
+                    <depends>
+                        <field id="enabled">1</field>
+                    </depends>
+                </field>
+                <field id="cron_schedule" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Cron Schedule</label>
+                    <comment>Cron expression for scheduled segment refresh (default: 0 2 * * * = daily at 2 AM)</comment>
+                    <depends>
+                        <field id="enabled">1</field>
+                    </depends>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
