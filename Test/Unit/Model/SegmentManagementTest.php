@@ -458,4 +458,190 @@ class SegmentManagementTest extends TestCase
         $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
         $this->assertFalse($result);
     }
+
+    public function testDoesCustomerMatchSegmentReturnsTrueWhenConditionsValidate(): void
+    {
+        $customerId = 1;
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getIsActive')->willReturn(true);
+        $segment->method('getConditionsSerialized')->willReturn('{}');
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
+        $combine->method('validate')->willReturn(true);
+
+        $this->combineFactory->method('create')->willReturn($combine);
+
+        $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
+        $this->assertTrue($result);
+    }
+
+    public function testExportSegmentCustomersAsCsvReturnsCsvContent(): void
+    {
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getIsActive')->willReturn(true);
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        // Mock segmentResource to return customer IDs
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([
+            ['customer_id' => 1]
+        ]);
+
+        // Use getMockBuilder with onlyMethods/addMethods for Customer
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+        $customer->method('getEmail')->willReturn('test@example.com');
+        $customer->method('getFirstname')->willReturn('John');
+        $customer->method('getLastname')->willReturn('Doe');
+        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('count')->willReturn(1);
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
+
+        $this->assertStringContainsString('Customer ID', $result);
+        $this->assertStringContainsString('Email', $result);
+        $this->assertStringContainsString('test@example.com', $result);
+    }
+
+    public function testExportSegmentCustomersAsXmlReturnsXmlContent(): void
+    {
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getIsActive')->willReturn(true);
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([
+            ['customer_id' => 1]
+        ]);
+
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
+            ->getMock();
+        $customer->method('getId')->willReturn('1'); // String for XML
+        $customer->method('getEmail')->willReturn('test@example.com');
+        $customer->method('getFirstname')->willReturn('John');
+        $customer->method('getLastname')->willReturn('Doe');
+        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('count')->willReturn(1);
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'xml');
+
+        $this->assertStringContainsString('<?xml version="1.0"?>', $result);
+        $this->assertStringContainsString('<customers>', $result);
+        $this->assertStringContainsString('test@example.com', $result);
+    }
+
+    public function testExportSegmentCustomersDefaultsToXmlForUnknownFormat(): void
+    {
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getIsActive')->willReturn(true);
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([
+            ['customer_id' => 1]
+        ]);
+
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
+            ->getMock();
+        $customer->method('getId')->willReturn('1'); // String for XML
+        $customer->method('getEmail')->willReturn('test@example.com');
+        $customer->method('getFirstname')->willReturn('John');
+        $customer->method('getLastname')->willReturn('Doe');
+        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('count')->willReturn(1);
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        // Unknown format defaults to XML
+        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'unknown');
+
+        $this->assertStringContainsString('<?xml version="1.0"?>', $result);
+    }
+
+    public function testExportSegmentCustomersThrowsNoSuchEntityForInvalidSegment(): void
+    {
+        $segmentId = 999;
+
+        $this->segmentRepository->method('getById')
+            ->willThrowException(new NoSuchEntityException(__('Segment not found')));
+
+        $this->expectException(NoSuchEntityException::class);
+
+        $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
+    }
+
+    public function testExportCsvEscapesSpecialCharacters(): void
+    {
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getIsActive')->willReturn(true);
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([
+            ['customer_id' => 1]
+        ]);
+
+        // Customer with potentially dangerous CSV content
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+        $customer->method('getEmail')->willReturn('test@example.com');
+        $customer->method('getFirstname')->willReturn('John"Smith'); // Quote in name
+        $customer->method('getLastname')->willReturn('Doe, Jr.'); // Comma in name
+        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('count')->willReturn(1);
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
+
+        // Verify the CSV properly escapes special characters (quotes doubled, commas handled)
+        $this->assertStringContainsString('Doe, Jr.', $result);
+        $this->assertStringContainsString('John""Smith', $result); // Quotes are escaped as doubled quotes
+    }
 }
