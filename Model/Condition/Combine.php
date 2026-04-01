@@ -44,11 +44,17 @@ class Combine extends BaseCombine
     protected Cart $conditionCart;
 
     /**
+     * @var Product
+     */
+    protected Product $conditionProduct;
+
+    /**
      * @param Context $context
      * @param ManagerInterface $eventManager
      * @param Customer $conditionCustomer
      * @param Order $conditionOrder
      * @param Cart $conditionCart
+     * @param Product $conditionProduct
      * @param array $data
      */
     public function __construct(
@@ -57,12 +63,14 @@ class Combine extends BaseCombine
         Customer $conditionCustomer,
         Order $conditionOrder,
         Cart $conditionCart,
+        Product $conditionProduct,
         array $data = []
     ) {
         $this->eventManager = $eventManager;
         $this->conditionCustomer = $conditionCustomer;
         $this->conditionOrder = $conditionOrder;
         $this->conditionCart = $conditionCart;
+        $this->conditionProduct = $conditionProduct;
         parent::__construct($context, $data);
         $this->setType(self::class);
     }
@@ -104,6 +112,16 @@ class Combine extends BaseCombine
             ];
         }
 
+        // Product attributes
+        $productAttributes = $this->conditionProduct->loadAttributeOptions()->getAttributeOption();
+        $productOptions = [];
+        foreach ($productAttributes as $code => $label) {
+            $productOptions[] = [
+                'value' => Product::class . '|' . $code,
+                'label' => $label,
+            ];
+        }
+
         $conditions = [
             [
                 'value' => self::class,
@@ -120,6 +138,10 @@ class Combine extends BaseCombine
             [
                 'label' => __('Shopping Cart'),
                 'value' => $cartOptions
+            ],
+            [
+                'label' => __('Product Interactions'),
+                'value' => $productOptions
             ]
         ];
 
