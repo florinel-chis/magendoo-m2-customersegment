@@ -22,6 +22,7 @@ use Magendoo\CustomerSegment\Model\Condition\Combine;
 use Magendoo\CustomerSegment\Model\Condition\Customer;
 use Magendoo\CustomerSegment\Model\Condition\Order;
 use Magendoo\CustomerSegment\Model\Condition\Cart;
+use Magendoo\CustomerSegment\Model\Condition\Product;
 
 class CombineTest extends TestCase
 {
@@ -39,6 +40,9 @@ class CombineTest extends TestCase
 
     /** @var Cart|MockObject */
     private $conditionCart;
+
+    /** @var Product|MockObject */
+    private $conditionProduct;
 
     /** @var Combine */
     private $combine;
@@ -70,12 +74,20 @@ class CombineTest extends TestCase
             ->getMock();
         $this->conditionCart->method('loadAttributeOptions')->willReturnSelf();
 
+        $this->conditionProduct = $this->getMockBuilder(Product::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['loadAttributeOptions'])
+            ->addMethods(['getAttributeOption'])
+            ->getMock();
+        $this->conditionProduct->method('loadAttributeOptions')->willReturnSelf();
+
         $this->combine = new Combine(
             $this->context,
             $this->eventManager,
             $this->conditionCustomer,
             $this->conditionOrder,
-            $this->conditionCart
+            $this->conditionCart,
+            $this->conditionProduct
         );
     }
 
@@ -139,6 +151,8 @@ class CombineTest extends TestCase
             'cart_subtotal' => 'Cart Subtotal',
         ]);
 
+        $this->conditionProduct->method('getAttributeOption')->willReturn([]);
+
         $this->eventManager->method('dispatch');
 
         $options = $this->combine->getNewChildSelectOptions();
@@ -153,11 +167,41 @@ class CombineTest extends TestCase
         $this->assertTrue($foundCartGroup, 'Shopping Cart group not found');
     }
 
+    public function testGetNewChildSelectOptionsContainsProductGroup(): void
+    {
+        $this->conditionCustomer->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionOrder->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionCart->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionProduct->method('getAttributeOption')->willReturn([
+            'purchased_products' => 'Purchased Products (SKU)',
+        ]);
+
+        $this->eventManager->method('dispatch');
+
+        $options = $this->combine->getNewChildSelectOptions();
+
+        $foundProductGroup = false;
+        foreach ($options as $option) {
+            if (isset($option['label']) && $option['label']->getText() === 'Product Interactions') {
+                $foundProductGroup = true;
+                break;
+            }
+        }
+        $this->assertTrue($foundProductGroup, 'Product Interactions group not found');
+    }
+
     public function testGetNewChildSelectOptionsContainsCombination(): void
     {
         $this->conditionCustomer->method('getAttributeOption')->willReturn([]);
 
         $this->conditionOrder->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionCart->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionProduct->method('getAttributeOption')->willReturn([]);
 
         $this->conditionCart->method('getAttributeOption')->willReturn([]);
 
@@ -182,6 +226,8 @@ class CombineTest extends TestCase
         $this->conditionOrder->method('getAttributeOption')->willReturn([]);
 
         $this->conditionCart->method('getAttributeOption')->willReturn([]);
+
+        $this->conditionProduct->method('getAttributeOption')->willReturn([]);
 
         $this->eventManager->expects($this->once())
             ->method('dispatch')
