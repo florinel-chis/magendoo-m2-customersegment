@@ -17,6 +17,7 @@ use Magento\Framework\Api\FilterBuilder;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DataObject;
+use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
@@ -42,6 +43,7 @@ class SegmentManagement implements SegmentManagementInterface
         \Magendoo\CustomerSegment\Model\Condition\Customer::class,
         \Magendoo\CustomerSegment\Model\Condition\Order::class,
         \Magendoo\CustomerSegment\Model\Condition\Cart::class,
+        \Magendoo\CustomerSegment\Model\Condition\Product::class,
     ];
 
     /**
@@ -100,6 +102,11 @@ class SegmentManagement implements SegmentManagementInterface
     protected ObjectManagerInterface $objectManager;
 
     /**
+     * @var ManagerInterface
+     */
+    protected ManagerInterface $eventManager;
+
+    /**
      * @param SegmentRepositoryInterface $segmentRepository
      * @param SegmentResource $segmentResource
      * @param CustomerCollectionFactory $customerCollectionFactory
@@ -110,6 +117,7 @@ class SegmentManagement implements SegmentManagementInterface
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param FilterBuilder $filterBuilder
      * @param LoggerInterface $logger
+     * @param ManagerInterface $eventManager
      */
     public function __construct(
         SegmentRepositoryInterface $segmentRepository,
@@ -122,6 +130,7 @@ class SegmentManagement implements SegmentManagementInterface
         SearchCriteriaBuilder $searchCriteriaBuilder,
         FilterBuilder $filterBuilder,
         LoggerInterface $logger,
+        ManagerInterface $eventManager,
         ?ObjectManagerInterface $objectManager = null
     ) {
         $this->segmentRepository = $segmentRepository;
@@ -134,6 +143,7 @@ class SegmentManagement implements SegmentManagementInterface
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->filterBuilder = $filterBuilder;
         $this->logger = $logger;
+        $this->eventManager = $eventManager;
         $this->objectManager = $objectManager ?? \Magento\Framework\App\ObjectManager::getInstance();
     }
 
@@ -154,6 +164,12 @@ class SegmentManagement implements SegmentManagementInterface
 
         $this->logger->info(__('Refreshing segment %1: %2', $segmentId, $segment->getName()));
 
+        // Dispatch event before refresh
+        $this->eventManager->dispatch(
+            'magendoo_customersegment_refresh_before',
+            ['segment' => $segment, 'segment_id' => $segmentId]
+        );
+
         // Clear existing customers
         $this->segmentResource->removeAllCustomers($segmentId);
 
@@ -162,6 +178,18 @@ class SegmentManagement implements SegmentManagementInterface
 
         if (empty($matchingCustomers)) {
             $this->segmentResource->updateCustomerCount($segmentId, 0);
+            
+            // Dispatch event after refresh (no customers assigned)
+            $this->eventManager->dispatch(
+                'magendoo_customersegment_refresh_after',
+                [
+                    'segment' => $segment,
+                    'segment_id' => $segmentId,
+                    'assigned_customers' => [],
+                    'assigned_count' => 0
+                ]
+            );
+            
             return 0;
         }
 
@@ -172,6 +200,17 @@ class SegmentManagement implements SegmentManagementInterface
         $this->segmentResource->updateCustomerCount($segmentId, $assignedCount);
 
         $this->logger->info(__('Segment %1 refreshed: %2 customers assigned', $segmentId, $assignedCount));
+
+        // Dispatch event after refresh
+        $this->eventManager->dispatch(
+            'magendoo_customersegment_refresh_after',
+            [
+                'segment' => $segment,
+                'segment_id' => $segmentId,
+                'assigned_customers' => $matchingCustomers,
+                'assigned_count' => $assignedCount
+            ]
+        );
 
         return $assignedCount;
     }
@@ -240,7 +279,17 @@ class SegmentManagement implements SegmentManagementInterface
     public function assignCustomerToSegment(int $customerId, int $segmentId): bool
     {
         try {
-            return $this->segmentResource->assignCustomer($segmentId, $customerId);
+            $result = $this->segmentResource->assignCustomer($segmentId, $customerId);
+            
+            if ($result) {
+                // Dispatch customer assigned event
+                $this->eventManager->dispatch(
+                    'magendoo_customersegment_customer_assigned',
+                    ['customer_id' => $customerId, 'segment_id' => $segmentId]
+                );
+            }
+            
+            return $result;
         } catch (LocalizedException $e) {
             throw new CouldNotSaveException(__($e->getMessage()));
         }
@@ -252,7 +301,17 @@ class SegmentManagement implements SegmentManagementInterface
     public function removeCustomerFromSegment(int $customerId, int $segmentId): bool
     {
         try {
-            return $this->segmentResource->removeCustomer($segmentId, $customerId);
+            $result = $this->segmentResource->removeCustomer($segmentId, $customerId);
+            
+            if ($result) {
+                // Dispatch customer removed event
+                $this->eventManager->dispatch(
+                    'magendoo_customersegment_customer_removed',
+                    ['customer_id' => $customerId, 'segment_id' => $segmentId]
+                );
+            }
+            
+            return $result;
         } catch (LocalizedException $e) {
             return false;
         }

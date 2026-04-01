@@ -17,6 +17,7 @@ use Magento\Framework\Api\FilterBuilder;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\ObjectManagerInterface;
@@ -70,6 +71,9 @@ class SegmentManagementTest extends TestCase
     /** @var ObjectManagerInterface|MockObject */
     private $objectManager;
 
+    /** @var ManagerInterface|MockObject */
+    private $eventManager;
+
     /** @var SegmentManagement */
     private $segmentManagement;
 
@@ -86,6 +90,7 @@ class SegmentManagementTest extends TestCase
         $this->filterBuilder = $this->createMock(FilterBuilder::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->objectManager = $this->createMock(ObjectManagerInterface::class);
+        $this->eventManager = $this->createMock(ManagerInterface::class);
 
         $this->segmentManagement = new SegmentManagement(
             $this->segmentRepository,
@@ -98,6 +103,7 @@ class SegmentManagementTest extends TestCase
             $this->searchCriteriaBuilder,
             $this->filterBuilder,
             $this->logger,
+            $this->eventManager,
             $this->objectManager
         );
     }
