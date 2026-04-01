@@ -1,0 +1,46 @@
+<!--
+/**
+ * Magendoo CustomerSegment Customer Grid Template
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<div class="admin__data-grid-wrap">
+    <div class="admin__data-grid-header-row">
+        <span class="admin__data-grid-header-row-info">
+            <text args="$t('Total Records: ')"/>
+            <span text="totalRecords"/>
+        </span>
+    </div>
+    
+    <table class="data-grid">
+        <thead>
+            <tr>
+                <th class="data-grid-th">Customer ID</th>
+                <th class="data-grid-th">Name</th>
+                <th class="data-grid-th">Email</th>
+                <th class="data-grid-th">City</th>
+                <th class="data-grid-th">Region</th>
+                <th class="data-grid-th">Country</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr if="items.length === 0">
+                <td class="data-grid-no-data" colspan="6">
+                    <span text="$t('No customers found for this segment.')"/>
+                </td>
+            </tr>
+            <tr repeat="foreach: items, item: '$customer'">
+                <td data-column="customer_id" text="$customer.customer_id"/>
+                <td data-column="name" text="$customer.name"/>
+                <td data-column="email" text="$customer.email"/>
+                <td data-column="billing_city" text="$customer.billing_city"/>
+                <td data-column="billing_region" text="$customer.billing_region"/>
+                <td data-column="billing_country_id" text="$customer.billing_country_id"/>
+            </tr>
+        </tbody>
+    </table>
+</div>
