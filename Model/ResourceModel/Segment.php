@@ -86,7 +86,7 @@ class Segment extends AbstractDb
     {
         $connection = $this->getConnection();
         $select = $connection->select()
-            ->from(self::TABLE_SEGMENT_CUSTOMER, ['customer_id', 'assigned_at'])
+            ->from($this->getTable(self::TABLE_SEGMENT_CUSTOMER), ['customer_id', 'assigned_at'])
             ->where('segment_id = ?', $segmentId);
 
         return $connection->fetchAll($select);
@@ -106,7 +106,7 @@ class Segment extends AbstractDb
         
         try {
             $connection->insertOnDuplicate(
-                self::TABLE_SEGMENT_CUSTOMER,
+                $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
                 [
                     'segment_id' => $segmentId,
                     'customer_id' => $customerId,
@@ -133,7 +133,7 @@ class Segment extends AbstractDb
         $connection = $this->getConnection();
         
         $rowsAffected = $connection->delete(
-            self::TABLE_SEGMENT_CUSTOMER,
+            $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
             [
                 'segment_id = ?' => $segmentId,
                 'customer_id = ?' => $customerId
@@ -155,7 +155,7 @@ class Segment extends AbstractDb
         $connection = $this->getConnection();
         
         return $connection->delete(
-            self::TABLE_SEGMENT_CUSTOMER,
+            $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
             ['segment_id = ?' => $segmentId]
         );
     }
@@ -173,7 +173,7 @@ class Segment extends AbstractDb
         $connection = $this->getConnection();
         
         $rowsAffected = $connection->update(
-            self::TABLE_NAME,
+            $this->getTable(self::TABLE_NAME),
             [
                 'customer_count' => $count,
                 'last_refreshed' => $this->dateTime->gmtDate()
@@ -195,7 +195,7 @@ class Segment extends AbstractDb
     {
         $connection = $this->getConnection();
         $select = $connection->select()
-            ->from(self::TABLE_SEGMENT_CUSTOMER, 'segment_id')
+            ->from($this->getTable(self::TABLE_SEGMENT_CUSTOMER), 'segment_id')
             ->where('customer_id = ?', $customerId);
 
         return array_map('intval', $connection->fetchCol($select));
@@ -234,7 +234,7 @@ class Segment extends AbstractDb
 
         foreach ($chunks as $chunk) {
             $connection->insertOnDuplicate(
-                self::TABLE_SEGMENT_CUSTOMER,
+                $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
                 $chunk,
                 ['assigned_at']
             );
