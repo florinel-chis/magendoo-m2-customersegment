@@ -48,21 +48,27 @@ class CombineTest extends TestCase
         $this->context = $this->createMock(Context::class);
         $this->eventManager = $this->createMock(ManagerInterface::class);
         
-        // Use partial mock with addMethods for magic methods
+        // Fix: Mock both loadAttributeOptions (returns $this) and getAttributeOption (magic method)
         $this->conditionCustomer = $this->getMockBuilder(Customer::class)
             ->disableOriginalConstructor()
+            ->onlyMethods(['loadAttributeOptions'])
             ->addMethods(['getAttributeOption'])
             ->getMock();
+        $this->conditionCustomer->method('loadAttributeOptions')->willReturnSelf();
             
         $this->conditionOrder = $this->getMockBuilder(Order::class)
             ->disableOriginalConstructor()
+            ->onlyMethods(['loadAttributeOptions'])
             ->addMethods(['getAttributeOption'])
             ->getMock();
+        $this->conditionOrder->method('loadAttributeOptions')->willReturnSelf();
             
         $this->conditionCart = $this->getMockBuilder(Cart::class)
             ->disableOriginalConstructor()
+            ->onlyMethods(['loadAttributeOptions'])
             ->addMethods(['getAttributeOption'])
             ->getMock();
+        $this->conditionCart->method('loadAttributeOptions')->willReturnSelf();
 
         $this->combine = new Combine(
             $this->context,
