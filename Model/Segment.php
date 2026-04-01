@@ -493,4 +493,20 @@ class Segment extends AbstractModel implements SegmentInterface, IdentityInterfa
         // Return the condition at path "1" (the root condition)
         return $result['1'] ?? null;
     }
+
+    /**
+     * @inheritdoc
+     */
+    public function getExtensionAttributes(): ?\Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface
+    {
+        return $this->_getExtensionAttributes();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setExtensionAttributes(\Magendoo\CustomerSegment\Api\Data\SegmentExtensionInterface $extensionAttributes): static
+    {
+        return $this->_setExtensionAttributes($extensionAttributes);
+    }
 }
