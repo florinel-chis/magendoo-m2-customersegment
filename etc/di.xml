@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Dependency Injection configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+
+    <!-- API Preferences -->
+    <preference for="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface"
+                type="Magendoo\CustomerSegment\Model\SegmentRepository"/>
+    <preference for="Magendoo\CustomerSegment\Api\SegmentManagementInterface"
+                type="Magendoo\CustomerSegment\Model\SegmentManagement"/>
+    <preference for="Magendoo\CustomerSegment\Api\Data\SegmentInterface"
+                type="Magendoo\CustomerSegment\Model\Segment"/>
+    <preference for="Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface"
+                type="Magendoo\CustomerSegment\Model\SegmentSearchResults"/>
+
+    <!-- Console Command Registration -->
+    <type name="Magento\Framework\Console\CommandList">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="magendoo_customersegment_refresh"
+                      xsi:type="object">Magendoo\CustomerSegment\Console\Command\SegmentRefreshCommand</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <!-- Collection Processor for Search Criteria -->
+    <type name="Magendoo\CustomerSegment\Model\SegmentRepository">
+        <arguments>
+            <argument name="collectionProcessor" xsi:type="object">Magento\Framework\Api\SearchCriteria\CollectionProcessor</argument>
+        </arguments>
+    </type>
+
+    <!-- Grid Collection Registration for UI Components -->
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="customersegment_segment_listing_data_source" xsi:type="string">Magendoo\CustomerSegment\Model\ResourceModel\Segment\Grid\Collection</item>
+            </argument>
+        </arguments>
+    </type>
+    
+    <!-- Grid Collection Configuration -->
+    <type name="Magendoo\CustomerSegment\Model\ResourceModel\Segment\Grid\Collection">
+        <arguments>
+            <argument name="mainTable" xsi:type="string">magendoo_customer_segment</argument>
+            <argument name="eventPrefix" xsi:type="string">magendoo_customersegment_segment_grid_collection</argument>
+            <argument name="eventObject" xsi:type="string">segment_grid_collection</argument>
+            <argument name="resourceModel" xsi:type="string">Magendoo\CustomerSegment\Model\ResourceModel\Segment</argument>
+        </arguments>
+    </type>
+
+    <!-- Segment Combine Factory -->
+    <type name="Magendoo\CustomerSegment\Model\Condition\CombineFactory">
+        <arguments>
+            <argument name="instanceName" xsi:type="string">Magendoo\CustomerSegment\Model\Condition\Combine</argument>
+        </arguments>
+    </type>
+
+    <!-- Logger injection -->
+    <type name="Magendoo\CustomerSegment\Model\SegmentManagement">
+        <arguments>
+            <argument name="logger" xsi:type="object">Psr\Log\LoggerInterface</argument>
+        </arguments>
+    </type>
+
+    <!-- Plugin: Add segment condition to Cart Price Rules -->
+    <type name="Magento\SalesRule\Model\Rule\Condition\Combine">
+        <plugin name="magendoo_customersegment_add_condition"
+                type="Magendoo\CustomerSegment\Plugin\AddSegmentConditionPlugin"/>
+    </type>
+
+    <!-- Plugin: Customer grid segment column -->
+    <type name="Magento\Customer\Model\ResourceModel\Grid\Collection">
+        <plugin name="magendoo_customersegment_customer_grid"
+                type="Magendoo\CustomerSegment\Plugin\CustomerGridPlugin"/>
+    </type>
+</config>

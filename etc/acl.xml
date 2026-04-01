@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment ACL configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Acl/etc/acl.xsd">
+    <acl>
+        <resources>
+            <resource id="Magento_Backend::admin">
+                <resource id="Magento_Customer::customer">
+                    <resource id="Magendoo_CustomerSegment::segments"
+                              title="Customer Segments"
+                              translate="title"
+                              sortOrder="50">
+                        <resource id="Magendoo_CustomerSegment::segment_view"
+                                  title="View Segments"
+                                  translate="title"/>
+                        <resource id="Magendoo_CustomerSegment::segment_edit"
+                                  title="Edit Segments"
+                                  translate="title"/>
+                        <resource id="Magendoo_CustomerSegment::segment_delete"
+                                  title="Delete Segments"
+                                  translate="title"/>
+                        <resource id="Magendoo_CustomerSegment::segment_refresh"
+                                  title="Refresh Segments"
+                                  translate="title"/>
+                    </resource>
+                </resource>
+            </resource>
+        </resources>
+    </acl>
+</config>

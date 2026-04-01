@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment database schema
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+
+    <!-- Main segments table -->
+    <table name="magendoo_customer_segment" resource="default" engine="innodb"
+           comment="Customer Segments">
+        <column xsi:type="int" name="segment_id" unsigned="true" nullable="false"
+                identity="true" comment="Segment ID"/>
+        <column xsi:type="varchar" name="name" nullable="false" length="255"
+                comment="Segment Name"/>
+        <column xsi:type="text" name="description" nullable="true"
+                comment="Segment Description"/>
+        <column xsi:type="smallint" name="is_active" unsigned="true" nullable="false"
+                default="1" comment="Is Active"/>
+        <column xsi:type="longtext" name="conditions_serialized" nullable="true"
+                comment="Serialized Conditions"/>
+        <column xsi:type="varchar" name="refresh_mode" nullable="false" length="20"
+                default="manual" comment="Refresh Mode: manual, cron, realtime"/>
+        <column xsi:type="varchar" name="cron_expression" nullable="true" length="255"
+                comment="Cron Expression"/>
+        <column xsi:type="int" name="customer_count" unsigned="true" nullable="false"
+                default="0" comment="Cached Customer Count"/>
+        <column xsi:type="timestamp" name="last_refreshed" nullable="true"
+                comment="Last Refresh Timestamp"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false"
+                default="CURRENT_TIMESTAMP" comment="Creation Time"/>
+        <column xsi:type="timestamp" name="updated_at" nullable="false"
+                default="CURRENT_TIMESTAMP" on_update="true" comment="Update Time"/>
+
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="segment_id"/>
+        </constraint>
+
+        <index referenceId="MAGENDOO_SEGMENT_IS_ACTIVE_IDX" indexType="btree">
+            <column name="is_active"/>
+        </index>
+        <index referenceId="MAGENDOO_SEGMENT_REFRESH_MODE_IDX" indexType="btree">
+            <column name="refresh_mode"/>
+        </index>
+    </table>
+
+    <!-- Segment to Customer relationship table -->
+    <table name="magendoo_customer_segment_customer" resource="default" engine="innodb"
+           comment="Customer Segment Relations">
+        <column xsi:type="int" name="id" unsigned="true" nullable="false"
+                identity="true" comment="Relation ID"/>
+        <column xsi:type="int" name="segment_id" unsigned="true" nullable="false"
+                comment="Segment ID"/>
+        <column xsi:type="int" name="customer_id" unsigned="true" nullable="false"
+                comment="Customer ID"/>
+        <column xsi:type="timestamp" name="assigned_at" nullable="false"
+                default="CURRENT_TIMESTAMP" comment="Assignment Time"/>
+
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="MAGENDOO_SEGMENT_CUSTOMER_UNIQUE">
+            <column name="segment_id"/>
+            <column name="customer_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="MAGENDOO_SEGMENT_CUST_SEGMENT_FK"
+                    table="magendoo_customer_segment_customer" column="segment_id"
+                    referenceTable="magendoo_customer_segment" referenceColumn="segment_id"
+                    onDelete="CASCADE"/>
+        <constraint xsi:type="foreign" referenceId="MAGENDOO_SEGMENT_CUST_CUSTOMER_FK"
+                    table="magendoo_customer_segment_customer" column="customer_id"
+                    referenceTable="customer_entity" referenceColumn="entity_id"
+                    onDelete="CASCADE"/>
+
+        <index referenceId="MAGENDOO_SEGMENT_CUST_SEGMENT_IDX" indexType="btree">
+            <column name="segment_id"/>
+        </index>
+        <index referenceId="MAGENDOO_SEGMENT_CUST_CUSTOMER_IDX" indexType="btree">
+            <column name="customer_id"/>
+        </index>
+    </table>
+
+    <!-- Segment activity log table -->
+    <table name="magendoo_customer_segment_log" resource="default" engine="innodb"
+           comment="Customer Segment Activity Log">
+        <column xsi:type="int" name="log_id" unsigned="true" nullable="false"
+                identity="true" comment="Log ID"/>
+        <column xsi:type="int" name="segment_id" unsigned="true" nullable="false"
+                comment="Segment ID"/>
+        <column xsi:type="varchar" name="action" nullable="false" length="50"
+                comment="Action Type"/>
+        <column xsi:type="text" name="details" nullable="true"
+                comment="Log Details"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false"
+                default="CURRENT_TIMESTAMP" comment="Log Timestamp"/>
+
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="log_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="MAGENDOO_SEGMENT_LOG_SEGMENT_FK"
+                    table="magendoo_customer_segment_log" column="segment_id"
+                    referenceTable="magendoo_customer_segment" referenceColumn="segment_id"
+                    onDelete="CASCADE"/>
+
+        <index referenceId="MAGENDOO_SEGMENT_LOG_SEGMENT_IDX" indexType="btree">
+            <column name="segment_id"/>
+        </index>
+        <index referenceId="MAGENDOO_SEGMENT_LOG_ACTION_IDX" indexType="btree">
+            <column name="action"/>
+        </index>
+        <index referenceId="MAGENDOO_SEGMENT_LOG_CREATED_IDX" indexType="btree">
+            <column name="created_at"/>
+        </index>
+    </table>
+</schema>

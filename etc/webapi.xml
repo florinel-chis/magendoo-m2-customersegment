@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Web API configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+
+    <!-- Segment CRUD Operations -->
+    <route url="/V1/customer-segments" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface" method="getList"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segments"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customer-segments/:segmentId" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface" method="getById"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segments"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customer-segments" method="POST">
+        <service class="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface" method="save"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segment_edit"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customer-segments/:segmentId" method="PUT">
+        <service class="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface" method="save"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segment_edit"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customer-segments/:segmentId" method="DELETE">
+        <service class="Magendoo\CustomerSegment\Api\SegmentRepositoryInterface" method="deleteById"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segment_delete"/>
+        </resources>
+    </route>
+
+    <!-- Segment Operations -->
+    <route url="/V1/customer-segments/:segmentId/refresh" method="POST">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="refreshSegment"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segment_refresh"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customer-segments/refresh-all" method="POST">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="refreshAllSegments"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segment_refresh"/>
+        </resources>
+    </route>
+
+    <!-- Customer Segments -->
+    <route url="/V1/customers/:customerId/segments" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="getCustomerSegments"/>
+        <resources>
+            <resource ref="Magento_Customer::customer"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customers/:customerId/segment-ids" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="getCustomerSegmentIds"/>
+        <resources>
+            <resource ref="Magento_Customer::customer"/>
+        </resources>
+    </route>
+
+    <route url="/V1/customers/:customerId/segments/:segmentId/check" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="isCustomerInSegment"/>
+        <resources>
+            <resource ref="Magento_Customer::customer"/>
+        </resources>
+    </route>
+
+    <!-- Segment Customers -->
+    <route url="/V1/customer-segments/:segmentId/customers" method="GET">
+        <service class="Magendoo\CustomerSegment\Api\SegmentManagementInterface" method="exportSegmentCustomers"/>
+        <resources>
+            <resource ref="Magendoo_CustomerSegment::segments"/>
+        </resources>
+    </route>
+</routes>
