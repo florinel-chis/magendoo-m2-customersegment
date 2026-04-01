@@ -657,4 +657,223 @@ class SegmentManagementTest extends TestCase
         $this->assertStringContainsString('"Doe, Jr."', $result); // Field with comma is quoted
         $this->assertStringContainsString('John""Smith', $result); // Quotes are escaped as doubled quotes
     }
+
+    public function testRefreshAllSegmentsCallsRefreshForEachActiveSegment(): void
+    {
+        // Segment list items (only provide IDs)
+        $segmentListItem1 = $this->createMock(SegmentInterface::class);
+        $segmentListItem1->method('getSegmentId')->willReturn(1);
+
+        $segmentListItem2 = $this->createMock(SegmentInterface::class);
+        $segmentListItem2->method('getSegmentId')->willReturn(2);
+
+        $searchCriteria = $this->createMock(SearchCriteriaInterface::class);
+        $this->searchCriteriaBuilder->method('addFilter')->willReturnSelf();
+        $this->searchCriteriaBuilder->method('create')->willReturn($searchCriteria);
+
+        $segmentSearchResults = $this->createMock(\Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface::class);
+        $segmentSearchResults->method('getItems')->willReturn([$segmentListItem1, $segmentListItem2]);
+
+        $this->segmentRepository->method('getList')->willReturn($segmentSearchResults);
+
+        // Full segment returned by getById in refreshSegment
+        $fullSegment = $this->createMock(SegmentInterface::class);
+        $fullSegment->method('getIsActive')->willReturn(true);
+        $fullSegment->method('getConditionsSerialized')->willReturn('{"type":"Combine","aggregator":"all","value":true}');
+
+        $this->segmentRepository->method('getById')->willReturn($fullSegment);
+
+        // Mock JSON serializer for conditions
+        $this->jsonSerializer->method('unserialize')
+            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
+
+        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
+        $combine->method('validate')->willReturn(true);
+        $this->combineFactory->method('create')->willReturn($combine);
+
+        // Mock customer collection with 2 customers
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer, $customer]));
+        $collection->method('getLastPageNumber')->willReturn(1);
+        $collection->method('setPageSize')->willReturnSelf();
+        $collection->method('setCurPage')->willReturnSelf();
+        $collection->method('clear')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        // Each segment goes through: removeAllCustomers -> massAssignCustomers -> updateCustomerCount
+        $this->segmentResource->expects($this->exactly(2))
+            ->method('removeAllCustomers');
+        $this->segmentResource->expects($this->exactly(2))
+            ->method('massAssignCustomers')
+            ->willReturn(2);
+        $this->segmentResource->expects($this->exactly(2))
+            ->method('updateCustomerCount');
+
+        $this->segmentManagement->refreshAllSegments();
+    }
+
+    public function testRefreshAllSegmentsLogsErrorOnException(): void
+    {
+        // Segment list item (only provides ID)
+        $segmentListItem = $this->createMock(SegmentInterface::class);
+        $segmentListItem->method('getSegmentId')->willReturn(1);
+
+        $searchCriteria = $this->createMock(SearchCriteriaInterface::class);
+        $this->searchCriteriaBuilder->method('addFilter')->willReturnSelf();
+        $this->searchCriteriaBuilder->method('create')->willReturn($searchCriteria);
+
+        $segmentSearchResults = $this->createMock(\Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface::class);
+        $segmentSearchResults->method('getItems')->willReturn([$segmentListItem]);
+
+        $this->segmentRepository->method('getList')->willReturn($segmentSearchResults);
+
+        // Full segment returned by getById
+        $fullSegment = $this->createMock(SegmentInterface::class);
+        $fullSegment->method('getIsActive')->willReturn(true);
+        $fullSegment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
+
+        $this->segmentRepository->method('getById')->willReturn($fullSegment);
+
+        $this->jsonSerializer->method('unserialize')
+            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
+
+        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
+        $combine->method('validate')->willReturn(true); // Customer matches
+        $this->combineFactory->method('create')->willReturn($combine);
+
+        // Mock customer collection with 1 customer (so massAssignCustomers gets called)
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getLastPageNumber')->willReturn(1);
+        $collection->method('setPageSize')->willReturnSelf();
+        $collection->method('setCurPage')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('clear')->willReturnSelf();
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        // Simulate exception during massAssignCustomers
+        $this->segmentResource->method('massAssignCustomers')
+            ->willThrowException(new \Exception('DB Error'));
+
+        // Error should be logged but not thrown (just check it was called, not the exact message)
+        $this->logger->expects($this->once())
+            ->method('error');
+
+        $this->segmentManagement->refreshAllSegments();
+    }
+
+    public function testMassRefreshCallsRefreshForEachSegment(): void
+    {
+        $segmentIds = [1, 2, 3];
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getIsActive')->willReturn(true);
+        $segment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->jsonSerializer->method('unserialize')
+            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
+
+        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
+        $combine->method('validate')->willReturn(true);
+        $this->combineFactory->method('create')->willReturn($combine);
+
+        // Mock customer collection
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('getLastPageNumber')->willReturn(1);
+        $collection->method('setPageSize')->willReturnSelf();
+        $collection->method('setCurPage')->willReturnSelf();
+        $collection->method('clear')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        // Each segment: removeAllCustomers -> massAssignCustomers (returns 1) -> updateCustomerCount
+        $this->segmentResource->expects($this->exactly(3))
+            ->method('removeAllCustomers');
+        $this->segmentResource->expects($this->exactly(3))
+            ->method('massAssignCustomers')
+            ->willReturn(1);
+        $this->segmentResource->expects($this->exactly(3))
+            ->method('updateCustomerCount');
+
+        $result = $this->segmentManagement->massRefresh($segmentIds);
+        $this->assertEquals(3, $result); // 3 segments * 1 customer
+    }
+
+    public function testMassRefreshLogsErrorOnException(): void
+    {
+        $segmentIds = [1, 2];
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getIsActive')->willReturn(true);
+        $segment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->jsonSerializer->method('unserialize')
+            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
+
+        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
+        $combine->method('validate')->willReturn(true);
+        $this->combineFactory->method('create')->willReturn($combine);
+
+        // Mock customer collection
+        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $customer->method('getId')->willReturn(1);
+
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
+        $collection->method('getLastPageNumber')->willReturn(1);
+        $collection->method('setPageSize')->willReturnSelf();
+        $collection->method('setCurPage')->willReturnSelf();
+        $collection->method('clear')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        // First segment succeeds, second throws during massAssignCustomers
+        $callCount = 0;
+        $this->segmentResource->method('massAssignCustomers')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                if ($callCount === 2) {
+                    throw new \Exception('DB Error');
+                }
+                return 1;
+            });
+
+        // Error should be logged - note the message format from production code
+        $this->logger->expects($this->once())
+            ->method('error');
+
+        $result = $this->segmentManagement->massRefresh($segmentIds);
+        $this->assertEquals(1, $result); // Only first segment's count
+    }
 }
