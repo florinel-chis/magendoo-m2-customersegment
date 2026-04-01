@@ -35,6 +35,16 @@ use Psr\Log\LoggerInterface;
 class SegmentManagement implements SegmentManagementInterface
 {
     /**
+     * Allowlist of permitted condition types to prevent arbitrary class instantiation
+     */
+    private const ALLOWED_CONDITION_TYPES = [
+        \Magendoo\CustomerSegment\Model\Condition\Combine::class,
+        \Magendoo\CustomerSegment\Model\Condition\Customer::class,
+        \Magendoo\CustomerSegment\Model\Condition\Order::class,
+        \Magendoo\CustomerSegment\Model\Condition\Cart::class,
+    ];
+
+    /**
      * @var SegmentRepositoryInterface
      */
     protected SegmentRepositoryInterface $segmentRepository;
@@ -441,6 +451,12 @@ class SegmentManagement implements SegmentManagementInterface
      */
     protected function createCondition(string $type, array $data): ?\Magento\Rule\Model\Condition\AbstractCondition
     {
+        // Security: Validate against allowlist to prevent arbitrary class instantiation
+        if (!in_array($type, self::ALLOWED_CONDITION_TYPES, true)) {
+            $this->logger->error(__('Security: Attempted to create condition with disallowed type: %1', $type));
+            return null;
+        }
+
         try {
             // Create the specific condition type (Customer, Order, Cart, etc.)
             $condition = $this->objectManager->create($type, ['data' => $data]);
