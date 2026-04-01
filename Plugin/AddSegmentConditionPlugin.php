@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Plugin;
 
+use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
 
@@ -26,12 +27,20 @@ class AddSegmentConditionPlugin
     protected SegmentRepositoryInterface $segmentRepository;
 
     /**
+     * @var SearchCriteriaBuilder
+     */
+    protected SearchCriteriaBuilder $searchCriteriaBuilder;
+
+    /**
      * @param SegmentRepositoryInterface $segmentRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      */
     public function __construct(
-        SegmentRepositoryInterface $segmentRepository
+        SegmentRepositoryInterface $segmentRepository,
+        SearchCriteriaBuilder $searchCriteriaBuilder
     ) {
         $this->segmentRepository = $segmentRepository;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     /**
@@ -71,9 +80,21 @@ class AddSegmentConditionPlugin
     protected function getSegmentOptions(): array
     {
         try {
-            // This would typically fetch from repository
-            // For now return empty array
-            return [];
+            $this->searchCriteriaBuilder->addFilter('is_active', 1);
+            $searchCriteria = $this->searchCriteriaBuilder->create();
+            
+            $searchResults = $this->segmentRepository->getList($searchCriteria);
+            $segments = $searchResults->getItems();
+            
+            $options = [];
+            foreach ($segments as $segment) {
+                $options[] = [
+                    'label' => $segment->getName(),
+                    'value' => $segment->getSegmentId(),
+                ];
+            }
+            
+            return $options;
         } catch (\Exception $e) {
             return [];
         }
