@@ -147,12 +147,50 @@ public function testCreateConditionRejectsDisallowedType(): void
 }
 ```
 
+## Additional Lessons from Round 2
+
+### 7. Repository getList() vs getById() Distinction
+
+When testing methods that use both `getList()` (for search results) and `getById()` (for full entity), remember they return different data:
+
+```php
+// getList() returns items with basic data (ID only)
+$segmentSearchResults->method('getItems')->willReturn([$segmentListItem]);
+
+// getById() returns full entity with all fields
+$this->segmentRepository->method('getById')->willReturn($fullSegment);
+```
+
+### 8. Collection Iterator Mocking
+
+For mocking collections used in `foreach` loops:
+
+```php
+$collection->method('getIterator')
+    ->willReturn(new \ArrayIterator([$customer1, $customer2]));
+```
+
+### 9. Avoiding Fragile String Assertions on Phrase Objects
+
+Magento uses `Phrase` objects for translations. Don't assert exact string matches:
+
+```php
+// FRAGILE: Phrase::__toString() may not work as expected
+$this->logger->expects($this->once())
+    ->method('error')
+    ->with($this->stringContains('Error message'));
+
+// BETTER: Just verify the method was called
+$this->logger->expects($this->once())->method('error');
+```
+
 ## Coverage Priorities
 
 1. **Security-critical paths**: Export, condition instantiation
 2. **Error handling**: try/catch blocks, null checks, edge cases
 3. **Public API surface**: All public methods should have tests
 4. **Complex logic**: Operator mapping, SQL condition translation
+5. **Batch operations**: refreshAllSegments(), massRefresh() iteration and error handling
 
 ## Running Tests
 
