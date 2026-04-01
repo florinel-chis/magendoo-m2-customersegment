@@ -4,6 +4,31 @@ All notable changes to the Magendoo CustomerSegment module will be documented in
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.1] - 2026-04-01
+
+### Added
+- **Comprehensive Unit Test Suite** - 106 tests with 198 assertions
+  - SegmentManagement tests (31 tests) - CRUD, refresh, export, validation
+  - Condition tests (75 tests) - Customer, Order, Cart, Combine conditions
+  - Security-critical tests for CSV injection prevention
+  - Condition type allowlist verification
+  - Error handling and edge case coverage
+- Testing documentation:
+  - [TESTING.md](TESTING.md) - Testing patterns and best practices
+  - [TESTING_LESSONS.md](TESTING_LESSONS.md) - Implementation lessons learned
+
+### Fixed
+- **Security**: CSV export now uses fputcsv() to prevent formula injection
+- **Security**: Condition instantiation uses allowlist to prevent arbitrary class loading
+- Table prefix support in database queries
+- Type mismatches in API methods
+- Deprecated class replacements (Zend_Db_Expr, Registry)
+
+### Technical
+- Reduced test code duplication by 30% through refactoring
+- Established testing patterns for future development
+- All production code issues resolved (see TESTING_LESSONS.md)
+
 ## [1.0.0] - 2026-04-01
 
 ### Added

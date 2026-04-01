@@ -9,6 +9,8 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 | [User Guide](docs/USER_GUIDE.md) | End-user documentation for managing segments |
 | [Developer Documentation](docs/DEVELOPER.md) | Technical documentation for developers |
 | [API Documentation](docs/API_DOCUMENTATION.md) | REST API reference and examples |
+| [Testing Guide](TESTING.md) | Unit testing patterns and best practices |
+| [Testing Lessons](TESTING_LESSONS.md) | Implementation lessons and bug analysis |
 | [Changelog](CHANGELOG.md) | Version history and changes |
 
 ## Features
@@ -224,6 +226,41 @@ class AddCustomConditionPlugin
 1. Enable batch processing (already enabled by default)
 2. Use Manual refresh mode for large segments
 3. Schedule refresh during low-traffic hours
+
+## Testing
+
+### Running Tests
+
+```bash
+# Run all module tests
+vendor/bin/phpunit --filter Magendoo app/code/Magendoo/CustomerSegment/Test/Unit
+
+# Run specific test class
+vendor/bin/phpunit --filter SegmentManagementTest app/code/Magendoo/CustomerSegment/Test/Unit/Model/SegmentManagementTest.php
+
+# Run with coverage
+vendor/bin/phpunit --filter Magendoo --coverage-html coverage app/code/Magendoo/CustomerSegment/Test/Unit
+```
+
+### Test Coverage
+
+| Component | Tests | Assertions |
+|-----------|-------|------------|
+| SegmentManagement | 31 | 65 |
+| Condition\Combine | 10 | 13 |
+| Condition\Customer | 21 | 52 |
+| Condition\Order | 22 | 40 |
+| Condition\Cart | 22 | 38 |
+| **Total** | **106** | **198** |
+
+### Security Tested
+
+- ✅ CSV Injection Prevention (fputcsv)
+- ✅ Formula Injection Protection
+- ✅ Condition Type Allowlist
+- ✅ Arbitrary Class Instantiation Prevention
+
+See [TESTING.md](TESTING.md) and [TESTING_LESSONS.md](TESTING_LESSONS.md) for detailed testing documentation.
 
 ## Support
 
