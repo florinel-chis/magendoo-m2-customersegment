@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Events configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
+    
+    <!-- Customer events -->
+    <event name="customer_register_success">
+        <observer name="magendoo_customersegment_customer_register"
+                  instance="Magendoo\CustomerSegment\Observer\CustomerRegister"/>
+    </event>
+    
+    <event name="customer_login">
+        <observer name="magendoo_customersegment_customer_login"
+                  instance="Magendoo\CustomerSegment\Observer\CustomerLogin"/>
+    </event>
+    
+    <event name="customer_save_after">
+        <observer name="magendoo_customersegment_customer_save"
+                  instance="Magendoo\CustomerSegment\Observer\CustomerSave"/>
+    </event>
+    
+    <!-- Order events -->
+    <event name="sales_order_place_after">
+        <observer name="magendoo_customersegment_order_place"
+                  instance="Magendoo\CustomerSegment\Observer\OrderPlaceAfter"/>
+    </event>
+    
+    <!-- Quote events -->
+    <event name="sales_quote_merge_after">
+        <observer name="magendoo_customersegment_quote_merge"
+                  instance="Magendoo\CustomerSegment\Observer\QuoteMergeAfter"/>
+    </event>
+    
+    <!-- Segment events -->
+    <event name="magendoo_customersegment_segment_save_after">
+        <observer name="magendoo_customersegment_segment_save_log"
+                  instance="Magendoo\CustomerSegment\Observer\LogSegmentSave"/>
+    </event>
+</config>

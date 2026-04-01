@@ -1,0 +1,20 @@
+<?php
+/**
+ * @var \Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\Conditions $block
+ * @var \Magento\Framework\View\Helper\SecureHtmlRenderer $secureRenderer
+ */
+
+$fieldsetId = $block->getConditionsFieldSetId();
+$newChildUrl = $block->getNewChildUrl();
+?>
+
+<div class="rule-tree">
+    <?= $block->getConditionsHtml() ?>
+</div>
+
+<?= /* @noEscape */ $secureRenderer->renderTag('script', [], 
+    "require(['Magento_Rule/rules', 'prototype'], function(VarienRulesForm){\n" .
+    "    window." . $fieldsetId . " = new VarienRulesForm('" . $fieldsetId . "', '" . $newChildUrl . "');\n" .
+    "});",
+    false
+) ?>

@@ -1,0 +1,33 @@
+# Git Ignore for Magendoo CustomerSegment Module
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Magento generated files (if any in module)
+generated/
+
+# Test coverage
+phpunit.xml
+coverage/
+
+# Node modules (for tests)
+node_modules/
+
+# Documentation that shouldn't be in repo
+AGENTS.md
+agents.md
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/

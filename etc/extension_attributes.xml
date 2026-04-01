@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Extension Attributes
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Api/etc/extension_attributes.xsd">
+    
+    <!-- Add segments to Customer interface -->
+    <extension_attributes for="Magento\Customer\Api\Data\CustomerInterface">
+        <attribute code="customer_segments" type="Magendoo\CustomerSegment\Api\Data\SegmentInterface[]">
+            <join reference_table="magendoo_customer_segment_customer"
+                  reference_field="customer_id"
+                  join_on_field="entity_id">
+                <field>segment_id</field>
+            </join>
+        </attribute>
+    </extension_attributes>
+    
+    <!-- Add segment IDs to Customer interface -->
+    <extension_attributes for="Magento\Customer\Api\Data\CustomerInterface">
+        <attribute code="segment_ids" type="int[]"/>
+    </extension_attributes>
+</config>
