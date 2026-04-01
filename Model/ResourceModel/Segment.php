@@ -198,7 +198,7 @@ class Segment extends AbstractDb
             ->from(self::TABLE_SEGMENT_CUSTOMER, 'segment_id')
             ->where('customer_id = ?', $customerId);
 
-        return $connection->fetchCol($select);
+        return array_map('intval', $connection->fetchCol($select));
     }
 
     /**
