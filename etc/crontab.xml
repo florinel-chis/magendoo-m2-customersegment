@@ -11,7 +11,7 @@
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Cron:etc/crontab.xsd">
-    <group id="default">
+    <group id="customer_segment">
         <job name="magendoo_customersegment_refresh"
              instance="Magendoo\CustomerSegment\Cron\RefreshSegments"
              method="execute">
