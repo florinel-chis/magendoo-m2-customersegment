@@ -12,9 +12,10 @@ declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Model\Rule\Condition;
 
-use Magento\Rule\Model\Condition\AbstractCondition;
+use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Rule\Model\Condition\Context;
 use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
+use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
 
 /**
  * Customer Segment condition for Cart Price Rules
@@ -27,16 +28,32 @@ class Segment extends AbstractCondition
     protected SegmentManagementInterface $segmentManagement;
 
     /**
+     * @var SegmentRepositoryInterface
+     */
+    protected SegmentRepositoryInterface $segmentRepository;
+
+    /**
+     * @var SearchCriteriaBuilder
+     */
+    protected SearchCriteriaBuilder $searchCriteriaBuilder;
+
+    /**
      * @param Context $context
      * @param SegmentManagementInterface $segmentManagement
+     * @param SegmentRepositoryInterface $segmentRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param array $data
      */
     public function __construct(
         Context $context,
         SegmentManagementInterface $segmentManagement,
+        SegmentRepositoryInterface $segmentRepository,
+        SearchCriteriaBuilder $searchCriteriaBuilder,
         array $data = []
     ) {
         $this->segmentManagement = $segmentManagement;
+        $this->segmentRepository = $segmentRepository;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         parent::__construct($context, $data);
     }
 
@@ -81,9 +98,25 @@ class Segment extends AbstractCondition
      */
     public function getValueSelectOptions(): array
     {
-        // This would typically load from segment repository
-        // For now return empty array
-        return [];
+        try {
+            $this->searchCriteriaBuilder->addFilter('is_active', 1);
+            $searchCriteria = $this->searchCriteriaBuilder->create();
+            
+            $searchResults = $this->segmentRepository->getList($searchCriteria);
+            $segments = $searchResults->getItems();
+            
+            $options = [];
+            foreach ($segments as $segment) {
+                $options[] = [
+                    'label' => $segment->getName(),
+                    'value' => $segment->getSegmentId(),
+                ];
+            }
+            
+            return $options;
+        } catch (\Exception $e) {
+            return [];
+        }
     }
 
     /**
