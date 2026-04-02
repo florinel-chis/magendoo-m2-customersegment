@@ -192,6 +192,7 @@ class Customer extends AbstractCondition
                 '<' => __('before'),
                 '>=' => __('equals or after'),
                 '<=' => __('equals or before'),
+                'between' => __('between'),
             ],
             'select' => [
                 '==' => __('is'),
@@ -269,7 +270,28 @@ class Customer extends AbstractCondition
             '$=' => ['like' => '%' . $value],
             '()' => ['in' => is_array($value) ? $value : explode(',', $value)],
             '!()' => ['nin' => is_array($value) ? $value : explode(',', $value)],
+            'between' => $this->buildBetweenCondition($value),
             default => ['eq' => $value],
         };
+    }
+
+    /**
+     * Build between condition for date ranges
+     *
+     * @param mixed $value
+     * @return array
+     */
+    protected function buildBetweenCondition(mixed $value): array
+    {
+        if (is_array($value)) {
+            return ['from' => $value[0] ?? '', 'to' => $value[1] ?? ''];
+        }
+
+        // Parse comma-separated values
+        $values = explode(',', $value);
+        return [
+            'from' => trim($values[0] ?? ''),
+            'to' => trim($values[1] ?? '')
+        ];
     }
 }

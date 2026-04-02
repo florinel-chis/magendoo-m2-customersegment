@@ -125,6 +125,7 @@ class Product extends AbstractCondition
                 '<' => __('less than'),
                 '>=' => __('equals or greater than'),
                 '<=' => __('equals or less than'),
+                'between' => __('between'),
             ],
             default => [
                 '==' => __('is'),
@@ -162,7 +163,7 @@ class Product extends AbstractCondition
         return match ($attribute) {
             'purchased_products' => $this->validatePurchasedProducts($customerId, $operator, $value),
             'purchased_categories' => $this->validatePurchasedCategories($customerId, $operator, $value),
-            'wishlist_items_count' => $this->validateWishlistItemsCount($customerId, $operator, (int) $value),
+            'wishlist_items_count' => $this->validateWishlistItemsCount($customerId, $operator, $value),
             'viewed_categories' => $this->validateViewedCategories($customerId, $operator, $value),
             default => false,
         };
@@ -250,10 +251,10 @@ class Product extends AbstractCondition
      *
      * @param int $customerId
      * @param string $operator
-     * @param int $value
+     * @param mixed $value
      * @return bool
      */
-    protected function validateWishlistItemsCount(int $customerId, string $operator, int $value): bool
+    protected function validateWishlistItemsCount(int $customerId, string $operator, mixed $value): bool
     {
         $connection = $this->resourceConnection->getConnection();
         $wishlistTable = $this->resourceConnection->getTableName('wishlist');
@@ -273,8 +274,30 @@ class Product extends AbstractCondition
             '<' => $actualCount < $value,
             '>=' => $actualCount >= $value,
             '<=' => $actualCount <= $value,
+            'between' => $this->isValueBetween($actualCount, $value),
             default => false,
         };
+    }
+
+    /**
+     * Check if value is between range
+     *
+     * @param float $actualValue
+     * @param mixed $rangeValue
+     * @return bool
+     */
+    protected function isValueBetween(float $actualValue, mixed $rangeValue): bool
+    {
+        if (is_array($rangeValue)) {
+            $min = (float) ($rangeValue[0] ?? 0);
+            $max = (float) ($rangeValue[1] ?? 0);
+        } else {
+            $values = explode(',', $rangeValue);
+            $min = (float) trim($values[0] ?? 0);
+            $max = (float) trim($values[1] ?? 0);
+        }
+
+        return $actualValue >= $min && $actualValue <= $max;
     }
 
     /**
