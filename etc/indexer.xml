@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Indexer configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Indexer/etc/indexer.xsd">
+    <indexer id="customersegment_segment"
+             view_id="customersegment_segment"
+             class="Magendoo\CustomerSegment\Model\Indexer\Segment">
+        <title translate="true">Customer Segments</title>
+        <description translate="true">Indexes customer segment assignments based on conditions</description>
+        <fieldset name="customer">
+            <source name="customer"/>
+        </fieldset>
+    </indexer>
+</config>
