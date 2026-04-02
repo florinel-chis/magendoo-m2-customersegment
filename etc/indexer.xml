@@ -16,8 +16,5 @@
              class="Magendoo\CustomerSegment\Model\Indexer\Segment">
         <title translate="true">Customer Segments</title>
         <description translate="true">Indexes customer segment assignments based on conditions</description>
-        <fieldset name="customer">
-            <source name="customer"/>
-        </fieldset>
     </indexer>
 </config>

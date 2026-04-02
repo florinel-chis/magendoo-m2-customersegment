@@ -14,15 +14,40 @@ namespace Magendoo\CustomerSegment\Ui\DataProvider\Form;
 
 use Magento\Customer\Model\ResourceModel\Customer\CollectionFactory;
 use Magento\Framework\App\RequestInterface;
-use Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider as BaseDataProvider;
+use Magento\Framework\View\Element\UiComponent\DataProvider\DataProviderInterface;
 use Magendoo\CustomerSegment\Model\ResourceModel\Customer\CollectionFactory as SegmentCustomerCollectionFactory;
 
-class MatchedCustomersDataProvider extends BaseDataProvider
+class MatchedCustomersDataProvider implements DataProviderInterface
 {
+    /**
+     * @var string
+     */
+    protected $name;
+
+    /**
+     * @var string
+     */
+    protected $primaryFieldName;
+
+    /**
+     * @var string
+     */
+    protected $requestFieldName;
+
+    /**
+     * @var array
+     */
+    protected $meta = [];
+
+    /**
+     * @var array
+     */
+    protected $data = [];
+
     /**
      * @var RequestInterface
      */
-    private $request;
+    protected $request;
 
     /**
      * @var SegmentCustomerCollectionFactory
@@ -59,16 +84,74 @@ class MatchedCustomersDataProvider extends BaseDataProvider
         array $meta = [],
         array $data = []
     ) {
-        parent::__construct($name, $primaryFieldName, $requestFieldName, $meta, $data);
+        $this->name = $name;
+        $this->primaryFieldName = $primaryFieldName;
+        $this->requestFieldName = $requestFieldName;
         $this->customerCollectionFactory = $customerCollectionFactory;
         $this->segmentCustomerCollectionFactory = $segmentCustomerCollectionFactory;
         $this->request = $request;
+        $this->meta = $meta;
+        $this->data = $data;
     }
 
     /**
-     * Get data
-     *
-     * @return array
+     * @inheritdoc
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getPrimaryFieldName(): string
+    {
+        return $this->primaryFieldName;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getRequestFieldName(): string
+    {
+        return $this->requestFieldName;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getMeta(): array
+    {
+        return $this->meta;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getFieldMetaInfo($fieldSetName, $fieldName): array
+    {
+        return $this->meta[$fieldSetName]['children'][$fieldName] ?? [];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getFieldSetMetaInfo($fieldSetName): array
+    {
+        return $this->meta[$fieldSetName] ?? [];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getFieldsMetaInfo($fieldSetName): array
+    {
+        return $this->meta[$fieldSetName]['children'] ?? [];
+    }
+
+    /**
+     * @inheritdoc
      */
     public function getData(): array
     {
@@ -124,6 +207,62 @@ class MatchedCustomersDataProvider extends BaseDataProvider
             'items' => $items,
             'totalRecords' => $collection->getSize()
         ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function addFilter(\Magento\Framework\Api\Filter $filter): void
+    {
+        // Filters not implemented for this provider
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function addOrder($field, $direction): void
+    {
+        // Sorting not implemented for this provider
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setLimit($offset, $size): void
+    {
+        // Limit handled in getData
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getConfigData(): array
+    {
+        return $this->data['config'] ?? [];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setConfigData($config): void
+    {
+        $this->data['config'] = $config;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getSearchCriteria(): \Magento\Framework\Api\Search\SearchCriteriaInterface
+    {
+        throw new \RuntimeException('Not implemented');
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getSearchResult(): \Magento\Framework\Api\Search\SearchResultInterface
+    {
+        throw new \RuntimeException('Not implemented');
     }
 
     /**
