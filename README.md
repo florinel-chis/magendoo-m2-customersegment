@@ -265,8 +265,8 @@ See [TESTING.md](TESTING.md) and [TESTING_LESSONS.md](TESTING_LESSONS.md) for de
 ## Support
 
 For support and questions:
-- Email: support@magendoo.com
-- Documentation: https://docs.magendoo.com/customer-segment
+- Email: info@magendoo.ro
+
 
 ## License
 
