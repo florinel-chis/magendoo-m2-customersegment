@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Magendoo CustomerSegment Mview configuration
+ *
+ * @category  Magendoo
+ * @package   Magendoo_CustomerSegment
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Mview/etc/mview.xsd">
+    <view id="customersegment_segment"
+          class="Magendoo\CustomerSegment\Model\Indexer\Segment"
+          group="indexer">
+        <subscriptions>
+            <table name="magendoo_customer_segment"
+                   entity_column="segment_id"
+                   subscription_model="Magento\Framework\Mview\View\Subscription"/>
+            <table name="customer_entity"
+                   entity_column="entity_id"
+                   subscription_model="Magento\Framework\Mview\View\Subscription"/>
+        </subscriptions>
+    </view>
+</config>
