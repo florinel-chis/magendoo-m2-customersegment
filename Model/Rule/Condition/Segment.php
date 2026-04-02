@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Magendoo\CustomerSegment\Model\Rule\Condition;
 
 use Magento\Framework\Api\SearchCriteriaBuilder;
+use Magento\Rule\Model\Condition\AbstractCondition;
 use Magento\Rule\Model\Condition\Context;
 use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
