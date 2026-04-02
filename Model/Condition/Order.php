@@ -136,6 +136,7 @@ class Order extends AbstractCondition
                 '!=' => __('is not'),
                 '>' => __('after'),
                 '<' => __('before'),
+                'between' => __('between'),
             ],
             'numeric', 'price' => [
                 '==' => __('equals'),
@@ -144,6 +145,7 @@ class Order extends AbstractCondition
                 '<' => __('less than'),
                 '>=' => __('equals or greater than'),
                 '<=' => __('equals or less than'),
+                'between' => __('between'),
             ],
             'select' => [
                 '==' => __('is'),
@@ -258,6 +260,7 @@ class Order extends AbstractCondition
                 '<' => $actualValue < $value,
                 '>=' => $actualValue >= $value,
                 '<=' => $actualValue <= $value,
+                'between' => $this->isValueBetween($actualValue, $value),
                 default => false,
             };
         }
@@ -333,5 +336,26 @@ class Order extends AbstractCondition
 
         $result = $connection->fetchOne($select);
         return (bool) $result;
+    }
+
+    /**
+     * Check if value is between range
+     *
+     * @param float $actualValue
+     * @param mixed $rangeValue
+     * @return bool
+     */
+    protected function isValueBetween(float $actualValue, mixed $rangeValue): bool
+    {
+        if (is_array($rangeValue)) {
+            $min = (float) ($rangeValue[0] ?? 0);
+            $max = (float) ($rangeValue[1] ?? 0);
+        } else {
+            $values = explode(',', $rangeValue);
+            $min = (float) trim($values[0] ?? 0);
+            $max = (float) trim($values[1] ?? 0);
+        }
+
+        return $actualValue >= $min && $actualValue <= $max;
     }
 }
