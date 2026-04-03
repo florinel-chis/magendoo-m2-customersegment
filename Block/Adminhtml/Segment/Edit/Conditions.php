@@ -15,7 +15,6 @@ namespace Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit;
 use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Block\Widget\Form\Generic;
 use Magento\Backend\Block\Widget\Form\Renderer\Fieldset;
-use Magento\Framework\App\Request\DataPersistorInterface;
 use Magento\Framework\Data\FormFactory;
 use Magento\Framework\Registry;
 use Magento\Rule\Block\Conditions as ConditionsRenderer;
@@ -42,18 +41,12 @@ class Conditions extends Generic
     protected SegmentFactory $segmentFactory;
 
     /**
-     * @var DataPersistorInterface
-     */
-    protected DataPersistorInterface $dataPersistor;
-
-    /**
      * @param Context $context
      * @param Registry $registry
      * @param FormFactory $formFactory
      * @param ConditionsRenderer $conditionsRenderer
      * @param Fieldset $fieldsetRenderer
      * @param SegmentFactory $segmentFactory
-     * @param DataPersistorInterface $dataPersistor
      * @param array $data
      */
     public function __construct(
@@ -63,13 +56,11 @@ class Conditions extends Generic
         ConditionsRenderer $conditionsRenderer,
         Fieldset $fieldsetRenderer,
         SegmentFactory $segmentFactory,
-        DataPersistorInterface $dataPersistor,
         array $data = []
     ) {
         $this->conditionsRenderer = $conditionsRenderer;
         $this->fieldsetRenderer = $fieldsetRenderer;
         $this->segmentFactory = $segmentFactory;
-        $this->dataPersistor = $dataPersistor;
         parent::__construct($context, $registry, $formFactory, $data);
     }
 
@@ -80,15 +71,7 @@ class Conditions extends Generic
      */
     protected function _prepareForm()
     {
-        $segment = $this->dataPersistor->get('current_segment');
-        
-        if (!$segment) {
-            $id = $this->getRequest()->getParam('segment_id');
-            $segment = $this->segmentFactory->create();
-            if ($id) {
-                $segment->load($id);
-            }
-        }
+        $segment = $this->getSegment();
 
         $formName = 'customersegment_segment_form';
         $conditionsFieldSetId = $segment->getConditionsFieldSetId($formName);
@@ -154,9 +137,10 @@ class Conditions extends Generic
      */
     public function getSegment(): \Magendoo\CustomerSegment\Model\Segment
     {
-        $segment = $this->dataPersistor->get('current_segment');
-        if (!$segment) {
-            $segment = $this->segmentFactory->create();
+        $id = $this->getRequest()->getParam('segment_id');
+        $segment = $this->segmentFactory->create();
+        if ($id) {
+            $segment->load($id);
         }
         return $segment;
     }

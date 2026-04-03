@@ -16,7 +16,6 @@ use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Block\Widget\Form\Generic;
 use Magento\Backend\Block\Widget\Form\Renderer\Fieldset;
 use Magento\Backend\Block\Widget\Tab\TabInterface;
-use Magento\Framework\App\Request\DataPersistorInterface;
 use Magento\Framework\Data\FormFactory;
 use Magento\Framework\Registry;
 use Magento\Rule\Block\Conditions as ConditionsBlock;
@@ -43,18 +42,12 @@ class Conditions extends Generic implements TabInterface
     protected $segmentFactory;
 
     /**
-     * @var DataPersistorInterface
-     */
-    protected DataPersistorInterface $dataPersistor;
-
-    /**
      * @param Context $context
      * @param Registry $registry
      * @param FormFactory $formFactory
      * @param ConditionsBlock $conditionsBlock
      * @param Fieldset $rendererFieldset
      * @param SegmentFactory $segmentFactory
-     * @param DataPersistorInterface $dataPersistor
      * @param array $data
      */
     public function __construct(
@@ -64,13 +57,11 @@ class Conditions extends Generic implements TabInterface
         ConditionsBlock $conditionsBlock,
         Fieldset $rendererFieldset,
         SegmentFactory $segmentFactory,
-        DataPersistorInterface $dataPersistor,
         array $data = []
     ) {
         $this->conditionsBlock = $conditionsBlock;
         $this->rendererFieldset = $rendererFieldset;
         $this->segmentFactory = $segmentFactory;
-        $this->dataPersistor = $dataPersistor;
         parent::__construct($context, $registry, $formFactory, $data);
     }
 
@@ -137,14 +128,10 @@ class Conditions extends Generic implements TabInterface
      */
     protected function _prepareForm()
     {
-        $model = $this->dataPersistor->get('current_segment');
-        
-        if (!$model) {
-            $id = $this->getRequest()->getParam('segment_id');
-            $model = $this->segmentFactory->create();
-            if ($id) {
-                $model->load($id);
-            }
+        $id = $this->getRequest()->getParam('segment_id');
+        $model = $this->segmentFactory->create();
+        if ($id) {
+            $model->load($id);
         }
 
         $formName = 'customersegment_segment_form';
