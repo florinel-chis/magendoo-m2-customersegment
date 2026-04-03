@@ -4,6 +4,33 @@ All notable changes to the Magendoo CustomerSegment module will be documented in
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-04-03
+
+### Added
+- Product Interactions condition type (viewed categories, purchased products, purchased categories, wishlist items count) with `between` operator
+- SqlBuilder for batch customer validation (N+1 performance fix)
+- Segment indexer with mview support (`etc/indexer.xml`, `etc/mview.xml`)
+- System configuration admin panel (`etc/adminhtml/system.xml`, `etc/config.xml`) for enable/disable, default refresh mode, cron schedule
+- RefreshButton on segment edit page
+- Matched Customers tab on segment edit page with pagination
+- MatchedCustomersDataProvider for matched customers grid
+- CustomerSegmentRelation model and ResourceModel for segment-customer relationships
+- Product::class added to condition type allowlists (SegmentManagement + NewConditionHtml)
+- Cart Price Rule integration now loads segment options from repository (was stub)
+- Functional test suite (Playwright) — API, CLI, Admin UI, Integration tests
+- Unit tests for Product condition and SqlBuilder
+
+### Fixed
+- **CRITICAL**: Segment model extended AbstractModel instead of AbstractExtensibleModel — getExtensionAttributes() crashed all REST API serialization
+- **CRITICAL**: SegmentSearchResultsInterface used short class name in @return docblock — Magento Web API reflection failed with "Class SegmentInterface does not exist" on getList endpoint
+- **CRITICAL**: Edit controller stored full Segment model object in DataPersistor (session) — non-serializable dependencies (FormFactory/ObjectManager/Closures) caused "Serialization of 'Closure' is not allowed" fatal error on every admin page load
+- Conditions blocks now load segment from DB via request param instead of DataPersistor
+- Removed DataPersistorInterface dependency from Conditions blocks
+
+### Changed
+- Segment model constructor now accepts ExtensionAttributesFactory and AttributeValueFactory (required by AbstractExtensibleModel)
+- Version bumped to 1.1.0
+
 ## [1.0.1] - 2026-04-01
 
 ### Added
@@ -71,13 +98,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Future Releases (Planned)
 
-### [1.1.0] - TBD
+### [1.2.0] - TBD
 - GraphQL API support
 - Segment-based email templates
 - Customer grid segment column
 - Advanced reporting for segments
 
-### [1.2.0] - TBD
+### [1.3.0] - TBD
 - Segment-based CMS content
 - Segment comparison tool
 - Import/Export segment definitions

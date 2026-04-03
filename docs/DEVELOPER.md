@@ -45,6 +45,7 @@ The CustomerSegment module follows Magento 2 best practices with a layered archi
 app/code/Magendoo/CustomerSegment/
 ├── Api/                              # Service Contracts
 │   ├── Data/
+│   │   ├── SegmentExtensionInterface.php
 │   │   ├── SegmentInterface.php      # Segment data interface
 │   │   └── SegmentSearchResultsInterface.php
 │   ├── SegmentRepositoryInterface.php
@@ -56,6 +57,7 @@ app/code/Magendoo/CustomerSegment/
 │               ├── BackButton.php
 │               ├── DeleteButton.php
 │               ├── GenericButton.php
+│               ├── MatchedCustomers.php
 │               ├── RefreshButton.php
 │               └── SaveButton.php
 ├── Console/                          # CLI Commands
@@ -67,7 +69,6 @@ app/code/Magendoo/CustomerSegment/
 │           ├── Delete.php            # Single delete
 │           ├── Edit.php              # Edit form
 │           ├── Index.php             # Grid list
-│           ├── InlineEdit.php        # Inline editing
 │           ├── MassDelete.php        # Bulk delete
 │           ├── MassRefresh.php       # Bulk refresh
 │           ├── NewAction.php         # New segment
@@ -80,22 +81,28 @@ app/code/Magendoo/CustomerSegment/
 │   └── Data.php
 ├── Model/                            # Business Logic
 │   ├── Condition/                    # Rule Engine
-│   │   ├── Combine.php               # AND/OR logic
-│   │   ├── CombineFactory.php
-│   │   ├── Customer.php              # Customer attributes
-│   │   ├── Order.php                 # Order history
-│   │   └── Cart.php                  # Shopping cart
+│   │   ├── Cart.php                  # Shopping cart
+│   │   ├── Combine.php              # AND/OR logic
+│   │   ├── Customer.php             # Customer attributes
+│   │   ├── Order.php                # Order history
+│   │   └── Product.php              # Product interactions
+│   ├── CustomerSegmentRelation.php
+│   ├── Indexer/
+│   │   └── Segment.php              # Segment indexer
 │   ├── ResourceModel/
-│   │   ├── Segment.php               # DB operations
+│   │   ├── Customer.php
+│   │   ├── Customer/
+│   │   │   └── Collection.php
+│   │   ├── Segment.php              # DB operations
 │   │   └── Segment/
 │   │       ├── Collection.php
 │   │       └── Grid/
 │   │           └── Collection.php    # Grid collection
 │   ├── Rule/                         # Rule processing
 │   ├── Segment.php                   # Main entity model
-│   ├── SegmentFactory.php
 │   ├── SegmentRepository.php         # Repository
 │   ├── SegmentManagement.php         # Business operations
+│   ├── SqlBuilder.php                # Batch SQL validation
 │   └── Source/                       # Option sources
 │       ├── RefreshMode.php
 │       └── Status.php
@@ -111,15 +118,13 @@ app/code/Magendoo/CustomerSegment/
 │   └── CustomerGridPlugin.php
 ├── Ui/                               # UI Components
 │   ├── Component/
-│   │   ├── Form/
-│   │   │   └── SegmentConditions.php
-│   │   ├── Listing/
-│   │   │   └── Column/
-│   │   │       └── Actions.php
-│   │   └── MassAction/
-│   │       └── Refresh.php
+│   │   └── Listing/
+│   │       └── Column/
+│   │           └── Actions.php
 │   └── DataProvider/
-│       └── SegmentDataProvider.php
+│       └── Form/
+│           ├── MatchedCustomersDataProvider.php
+│           └── SegmentDataProvider.php
 ├── etc/                              # Configuration
 │   ├── module.xml
 │   ├── db_schema.xml                 # DB schema
@@ -127,17 +132,15 @@ app/code/Magendoo/CustomerSegment/
 │   ├── webapi.xml                    # REST API routes
 │   ├── events.xml                    # Event observers
 │   ├── crontab.xml                   # Cron schedule
-│   ├── indexer.xml
+│   ├── indexer.xml                   # Indexer declaration
+│   ├── mview.xml                     # Materialized views
 │   ├── acl.xml                       # Permissions
 │   ├── config.xml                    # Default config
 │   ├── extension_attributes.xml
-│   ├── adminhtml/
-│   │   ├── di.xml
-│   │   ├── menu.xml                  # Admin menu
-│   │   ├── routes.xml                # URL routes
-│   │   └── system.xml                # System config
-│   └── frontend/
-│       └── di.xml
+│   └── adminhtml/
+│       ├── menu.xml                  # Admin menu
+│       ├── routes.xml                # URL routes
+│       └── system.xml                # System config
 └── view/
     └── adminhtml/
         ├── layout/
@@ -171,6 +174,7 @@ Magento\Rule\Model\Condition\AbstractCondition
             └── Magendoo\CustomerSegment\Model\Condition\Customer
             └── Magendoo\CustomerSegment\Model\Condition\Order
             └── Magendoo\CustomerSegment\Model\Condition\Cart
+            └── Magendoo\CustomerSegment\Model\Condition\Product
 ```
 
 ### Creating a Custom Condition
