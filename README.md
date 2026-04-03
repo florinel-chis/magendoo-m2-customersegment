@@ -47,10 +47,18 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 - Has Active Cart
 - Days Since Cart Activity
 
+#### Product Interactions
+- Viewed Categories
+- Purchased Products (SKU)
+- Purchased from Categories
+- Wishlist Items Count
+
 ### Admin Features
 - Grid view of all segments with customer counts
 - Create/Edit segments with visual rule builder
 - Preview matching customers before saving
+- "Matched Customers" tab on edit page shows assigned customers
+- Refresh button on edit page
 - Mass actions (Delete, Refresh)
 - Export segment customers (CSV/XML)
 
@@ -59,6 +67,7 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 - CLI commands for segment operations
 - Integration with Cart Price Rules
 - Customer grid segment filtering
+- Segment indexer with mview support
 
 ## Installation
 
