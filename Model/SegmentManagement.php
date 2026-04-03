@@ -458,6 +458,7 @@ class SegmentManagement implements SegmentManagementInterface
         }
 
         $combine = $this->combineFactory->create();
+        $combine->setPrefix('conditions');
         $combine->setConditions([]);
         $combine->setAggregator($conditionsArray['aggregator'] ?? 'all');
         $combine->setValue($conditionsArray['value'] ?? true);
@@ -483,6 +484,7 @@ class SegmentManagement implements SegmentManagementInterface
             if (str_contains($type, 'Combine')) {
                 // Nested conditions
                 $childCombine = $this->combineFactory->create();
+                $childCombine->setPrefix('conditions');
                 $childCombine->setAggregator($conditionData['aggregator'] ?? 'all');
                 $childCombine->setValue($conditionData['value'] ?? true);
                 
