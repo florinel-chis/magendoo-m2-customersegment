@@ -88,19 +88,10 @@ class Edit extends Action implements HttpGetActionInterface
             $pageTitle = __('New Segment');
         }
 
-        // Store segment in DataPersistor for blocks to access
-        $this->dataPersistor->set('current_segment', $segment);
-
-        // Configure conditions form for editing (like SalesRule does)
-        if ($segment->getId()) {
-            $formName = 'customersegment_segment_form';
-            if ($segment->getConditions()) {
-                $segment->getConditions()->setFormName($formName);
-                $segment->getConditions()->setJsFormObject(
-                    $segment->getConditionsFieldSetId($formName)
-                );
-            }
-        }
+        // Store only the segment ID in DataPersistor (not the model object,
+        // which contains non-serializable dependencies like FormFactory/ObjectManager
+        // that cause "Serialization of Closure" fatal errors on session_write_close)
+        $this->dataPersistor->set('current_segment_id', $segment->getId());
 
         /** @var \Magento\Backend\Model\View\Result\Page $resultPage */
         $resultPage = $this->resultFactory->create(ResultFactory::TYPE_PAGE);
