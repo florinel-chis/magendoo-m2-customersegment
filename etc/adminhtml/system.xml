@@ -31,9 +31,10 @@
                         <field id="enabled">1</field>
                     </depends>
                 </field>
-                <field id="cron_schedule" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="cron_schedule" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Cron Schedule</label>
-                    <comment>Cron expression for scheduled segment refresh (default: 0 2 * * * = daily at 2 AM)</comment>
+                    <backend_model>Magendoo\CustomerSegment\Model\Config\Backend\CronSchedule</backend_model>
+                    <comment>How often the cron dispatcher runs to check segments (default: */5 * * * * = every 5 minutes). Each segment can override this with its own Cron Expression.</comment>
                     <depends>
                         <field id="enabled">1</field>
                     </depends>

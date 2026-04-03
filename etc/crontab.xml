@@ -15,7 +15,7 @@
         <job name="magendoo_customersegment_refresh"
              instance="Magendoo\CustomerSegment\Cron\RefreshSegments"
              method="execute">
-            <schedule>0 2 * * *</schedule>
+            <config_path>crontab/customer_segment/jobs/magendoo_customersegment_refresh/schedule/cron_expr</config_path>
         </job>
     </group>
 </config>
