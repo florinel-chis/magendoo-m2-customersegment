@@ -16,8 +16,19 @@
             <general>
                 <enabled>1</enabled>
                 <default_refresh_mode>manual</default_refresh_mode>
-                <cron_schedule>0 2 * * *</cron_schedule>
+                <cron_schedule>*/5 * * * *</cron_schedule>
             </general>
         </customersegment>
+        <crontab>
+            <customer_segment>
+                <jobs>
+                    <magendoo_customersegment_refresh>
+                        <schedule>
+                            <cron_expr>*/5 * * * *</cron_expr>
+                        </schedule>
+                    </magendoo_customersegment_refresh>
+                </jobs>
+            </customer_segment>
+        </crontab>
     </default>
 </config>

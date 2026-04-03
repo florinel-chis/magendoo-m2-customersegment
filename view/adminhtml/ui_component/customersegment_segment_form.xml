@@ -141,7 +141,7 @@
                 <dataType>text</dataType>
                 <label translate="true">Cron Expression</label>
                 <dataScope>cron_expression</dataScope>
-                <notice translate="true">Example: 0 2 * * * (daily at 2 AM)</notice>
+                <notice translate="true">Per-segment schedule. Leave empty to refresh on every cron run. Examples: 0 2 * * * (daily 2 AM), 0 */2 * * * (every 2 hours), 0 0 * * 1 (Mondays)</notice>
             </settings>
         </field>
         <field name="customer_count" formElement="input">
