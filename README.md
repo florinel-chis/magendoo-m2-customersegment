@@ -2,6 +2,16 @@
 
 A comprehensive Customer Segmentation module for Magento 2 Community Edition that enables merchants to create dynamic customer segments based on various criteria including customer attributes, order history, shopping cart data, and behavior patterns.
 
+## Screenshots
+
+### Segment Grid — manage all your customer segments at a glance
+
+![Customer Segments Grid](docs/magento2-customer-segments-list.png)
+
+### Segment Editor — visual rule builder with conditions and customer matching
+
+![Customer Segment Edit](docs/magento2-customer-segments-edit.png)
+
 ## Documentation
 
 | Document | Description |
