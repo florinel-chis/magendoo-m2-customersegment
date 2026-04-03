@@ -12,8 +12,10 @@ declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Model;
 
+use Magento\Framework\Api\ExtensionAttributesFactory;
+use Magento\Framework\Api\AttributeValueFactory;
 use Magento\Framework\DataObject\IdentityInterface;
-use Magento\Framework\Model\AbstractModel;
+use Magento\Framework\Model\AbstractExtensibleModel;
 use Magendoo\CustomerSegment\Api\Data\SegmentInterface;
 use Magendoo\CustomerSegment\Model\Condition\Combine;
 use Magendoo\CustomerSegment\Model\Condition\CombineFactory;
@@ -43,7 +45,7 @@ use Magendoo\CustomerSegment\Model\ResourceModel\Segment as SegmentResource;
  * @method string getUpdatedAt()
  * @method Segment setUpdatedAt(string $date)
  */
-class Segment extends AbstractModel implements SegmentInterface, IdentityInterface
+class Segment extends AbstractExtensibleModel implements SegmentInterface, IdentityInterface
 {
     /**
      * Segment cache tag
@@ -73,6 +75,8 @@ class Segment extends AbstractModel implements SegmentInterface, IdentityInterfa
     /**
      * @param \Magento\Framework\Model\Context $context
      * @param \Magento\Framework\Registry $registry
+     * @param ExtensionAttributesFactory $extensionFactory
+     * @param AttributeValueFactory $customAttributeFactory
      * @param \Magento\Framework\Data\FormFactory $formFactory
      * @param \Magento\Framework\Model\ResourceModel\AbstractResource|null $resource
      * @param \Magento\Framework\Data\Collection\AbstractDb|null $resourceCollection
@@ -81,13 +85,15 @@ class Segment extends AbstractModel implements SegmentInterface, IdentityInterfa
     public function __construct(
         \Magento\Framework\Model\Context $context,
         \Magento\Framework\Registry $registry,
+        ExtensionAttributesFactory $extensionFactory,
+        AttributeValueFactory $customAttributeFactory,
         \Magento\Framework\Data\FormFactory $formFactory,
         ?\Magento\Framework\Model\ResourceModel\AbstractResource $resource = null,
         ?\Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null,
         array $data = []
     ) {
         $this->_formFactory = $formFactory;
-        parent::__construct($context, $registry, $resource, $resourceCollection, $data);
+        parent::__construct($context, $registry, $extensionFactory, $customAttributeFactory, $resource, $resourceCollection, $data);
     }
 
     /**

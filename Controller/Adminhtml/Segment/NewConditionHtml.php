@@ -38,6 +38,7 @@ class NewConditionHtml extends Action implements HttpPostActionInterface
         \Magendoo\CustomerSegment\Model\Condition\Customer::class,
         \Magendoo\CustomerSegment\Model\Condition\Order::class,
         \Magendoo\CustomerSegment\Model\Condition\Cart::class,
+        \Magendoo\CustomerSegment\Model\Condition\Product::class,
     ];
 
     /**

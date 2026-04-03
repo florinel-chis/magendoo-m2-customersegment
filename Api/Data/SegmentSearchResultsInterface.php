@@ -24,14 +24,14 @@ interface SegmentSearchResultsInterface extends SearchResultsInterface
     /**
      * Get segments list
      *
-     * @return SegmentInterface[]
+     * @return \Magendoo\CustomerSegment\Api\Data\SegmentInterface[]
      */
     public function getItems(): array;
 
     /**
      * Set segments list
      *
-     * @param SegmentInterface[] $items
+     * @param \Magendoo\CustomerSegment\Api\Data\SegmentInterface[] $items
      * @return $this
      */
     public function setItems(array $items): static;
