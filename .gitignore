@@ -15,13 +15,15 @@ Thumbs.db
 generated/
 
 # Test coverage
-phpunit.xml
 coverage/
 
 # Node modules (for tests)
 node_modules/
 
 # Documentation that shouldn't be in repo
+code_review.md
+TESTING_LESSONS.md
+unit_tests.txt
 
 # Log files
 *.log
@@ -29,3 +31,12 @@ node_modules/
 # Temporary files
 tmp/
 temp/
+
+# Composer
+composer.lock
+
+# PHPStan
+.phpstan/
+
+# PHP CS Fixer
+.php-cs-fixer.cache
