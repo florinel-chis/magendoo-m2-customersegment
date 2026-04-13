@@ -42,7 +42,8 @@
     },
     "config": {
         "allow-plugins": {
-            "magento/magento-composer-installer": true
+            "magento/magento-composer-installer": true,
+            "magento/composer-dependency-version-audit-plugin": false
         }
     }
 }
