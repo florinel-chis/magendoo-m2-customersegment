@@ -5,3 +5,8 @@ parameters:
     excludePaths:
         analyse:
             - vendor
+    ignoreErrors:
+        # Magento generates Factory classes at DI compile time; they do not exist as source files
+        - '#has unknown class [A-Za-z\\]+Factory as its type\.#'
+        - '#has invalid type [A-Za-z\\]+Factory\.#'
+        - '#Call to method \w+ on an unknown class [A-Za-z\\]+Factory\.#'
