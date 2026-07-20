@@ -1,20 +1,28 @@
 <?php
 /**
+ * Magendoo CustomerSegment - condition tree template
+ *
  * @var \Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\Conditions $block
+ * @var \Magento\Framework\Escaper $escaper
  * @var \Magento\Framework\View\Helper\SecureHtmlRenderer $secureRenderer
+ *
+ * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
-$fieldsetId = $block->getConditionsFieldSetId();
-$newChildUrl = $block->getNewChildUrl();
+$fieldsetId = $escaper->escapeJs($block->getConditionsFieldSetId());
+$newChildUrl = $escaper->escapeJs($block->getNewChildUrl());
 ?>
 
 <div class="rule-tree">
-    <?= $block->getConditionsHtml() ?>
+    <?= /* @noEscape */ $block->getConditionsHtml() ?>
 </div>
 
-<?= /* @noEscape */ $secureRenderer->renderTag('script', [], 
-    "require(['Magento_Rule/rules', 'prototype'], function(VarienRulesForm){\n" .
-    "    window." . $fieldsetId . " = new VarienRulesForm('" . $fieldsetId . "', '" . $newChildUrl . "');\n" .
-    "});",
+<?= /* @noEscape */ $secureRenderer->renderTag(
+    'script',
+    [],
+    "require(['Magento_Rule/rules', 'prototype'], function (VarienRulesForm) {\n"
+    . "    window." . $fieldsetId . " = new VarienRulesForm('" . $fieldsetId . "', '" . $newChildUrl . "');\n"
+    . "});",
     false
 ) ?>

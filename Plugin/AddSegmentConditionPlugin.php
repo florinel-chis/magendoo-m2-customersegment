@@ -1,102 +1,47 @@
 <?php
 /**
- * Magendoo CustomerSegment Add Segment Condition Plugin
+ * Magendoo CustomerSegment - Cart Price Rule condition registration
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Plugin;
 
-use Magento\Framework\Api\SearchCriteriaBuilder;
-use Magento\Framework\Exception\NoSuchEntityException;
-use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
+use Magento\SalesRule\Model\Rule\Condition\Combine;
 
 /**
- * Plugin to add customer segment condition to Cart Price Rules
+ * Exposes the customer segment condition inside Cart Price Rule conditions.
+ *
+ * The condition group is offered unconditionally so that rules can be authored
+ * before any segment exists; the concrete segment list is supplied by
+ * Model\Rule\Condition\Segment::getValueSelectOptions() when the option is used.
  */
 class AddSegmentConditionPlugin
 {
     /**
-     * @var SegmentRepositoryInterface
-     */
-    protected SegmentRepositoryInterface $segmentRepository;
-
-    /**
-     * @var SearchCriteriaBuilder
-     */
-    protected SearchCriteriaBuilder $searchCriteriaBuilder;
-
-    /**
-     * @param SegmentRepositoryInterface $segmentRepository
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     */
-    public function __construct(
-        SegmentRepositoryInterface $segmentRepository,
-        SearchCriteriaBuilder $searchCriteriaBuilder
-    ) {
-        $this->segmentRepository = $segmentRepository;
-        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
-    }
-
-    /**
-     * Add customer segment condition to available conditions
+     * Add the customer segment condition to the available conditions.
      *
-     * @param \Magento\SalesRule\Model\Rule\Condition\Combine $subject
+     * @param Combine $subject
      * @param array $result
      * @return array
      */
     public function afterGetNewChildSelectOptions(
-        \Magento\SalesRule\Model\Rule\Condition\Combine $subject,
+        Combine $subject,
         array $result
     ): array {
-        // Get active segments for the dropdown
-        $segmentOptions = $this->getSegmentOptions();
-
-        if (!empty($segmentOptions)) {
-            $result[] = [
-                'label' => __('Customer Segments'),
-                'value' => [
-                    [
-                        'label' => __('Segment'),
-                        'value' => 'Magendoo\CustomerSegment\Model\Rule\Condition\Segment',
-                    ],
+        $result[] = [
+            'label' => __('Customer Segments'),
+            'value' => [
+                [
+                    'label' => __('Segment'),
+                    'value' => \Magendoo\CustomerSegment\Model\Rule\Condition\Segment::class,
                 ],
-            ];
-        }
+            ],
+        ];
 
         return $result;
-    }
-
-    /**
-     * Get segment options for dropdown
-     *
-     * @return array
-     */
-    protected function getSegmentOptions(): array
-    {
-        try {
-            $this->searchCriteriaBuilder->addFilter('is_active', 1);
-            $searchCriteria = $this->searchCriteriaBuilder->create();
-            
-            $searchResults = $this->segmentRepository->getList($searchCriteria);
-            $segments = $searchResults->getItems();
-            
-            $options = [];
-            foreach ($segments as $segment) {
-                $options[] = [
-                    'label' => $segment->getName(),
-                    'value' => $segment->getSegmentId(),
-                ];
-            }
-            
-            return $options;
-        } catch (\Exception $e) {
-            return [];
-        }
     }
 }

@@ -1,46 +1,53 @@
 <?php
 /**
- * Magendoo CustomerSegment Customer Login Observer
+ * Magendoo CustomerSegment - Realtime membership on customer login
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Observer;
 
+use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
+use Magendoo\CustomerSegment\Helper\Data as Helper;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
-use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * Observer for customer login
+ * Re-evaluates realtime segment membership when a customer logs in.
  */
 class CustomerLogin implements ObserverInterface
 {
     /**
      * @var SegmentManagementInterface
      */
-    protected SegmentManagementInterface $segmentManagement;
+    private SegmentManagementInterface $segmentManagement;
+
+    /**
+     * @var Helper
+     */
+    private Helper $helper;
 
     /**
      * @var LoggerInterface
      */
-    protected LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /**
      * @param SegmentManagementInterface $segmentManagement
+     * @param Helper $helper
      * @param LoggerInterface $logger
      */
     public function __construct(
         SegmentManagementInterface $segmentManagement,
+        Helper $helper,
         LoggerInterface $logger
     ) {
         $this->segmentManagement = $segmentManagement;
+        $this->helper = $helper;
         $this->logger = $logger;
     }
 
@@ -52,25 +59,18 @@ class CustomerLogin implements ObserverInterface
      */
     public function execute(Observer $observer): void
     {
-        /** @var \Magento\Customer\Model\Customer $customer */
+        if (!$this->helper->isEnabled()) {
+            return;
+        }
+
         $customer = $observer->getEvent()->getCustomer();
-        
+
         if (!$customer || !$customer->getId()) {
             return;
         }
 
         try {
-            // Get customer's segments for session storage or caching
-            $segments = $this->segmentManagement->getCustomerSegments((int) $customer->getId());
-            
-            // Store in customer session or cache for quick access
-            // This is a placeholder - actual implementation depends on requirements
-            $this->logger->debug(
-                sprintf('Customer %d logged in with %d segments', 
-                    $customer->getId(), 
-                    count($segments)
-                )
-            );
+            $this->segmentManagement->updateCustomerMembership((int) $customer->getId());
         } catch (\Exception $e) {
             $this->logger->error('CustomerLogin observer error: ' . $e->getMessage());
         }

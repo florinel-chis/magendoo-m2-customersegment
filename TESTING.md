@@ -1,5 +1,10 @@
 # Testing Guide for Magendoo_CustomerSegment
 
+> The unit suite targets **PHPUnit 12**. `MockBuilder::addMethods()` was removed in PHPUnit 12 — mock
+> magic (`DataObject`/magic-getter) methods with `createMock()` plus `willReturnCallback()` or a real
+> double instead. Tests use PHPUnit attributes (`#[DataProvider]`, `#[Test]`), not doc-comment
+> annotations.
+
 ## Lessons Learned from Code Review
 
 ### 1. Mock Chaining with Magic Methods
@@ -14,14 +19,16 @@ $this->conditionCustomer = $this->getMockBuilder(Customer::class)
     ->getMock();
 ```
 
-**Correct:**
+**Correct (PHPUnit 12):**
 ```php
-// CORRECT: Both methods stubbed, chain works
+// CORRECT: mock only real methods; drive magic methods via a callback.
+// addMethods() was removed in PHPUnit 12, so magic methods cannot be added to the mock builder.
 $this->conditionCustomer = $this->getMockBuilder(Customer::class)
     ->onlyMethods(['loadAttributeOptions'])  // Real method
-    ->addMethods(['getAttributeOption'])      // Magic method
+    ->disableOriginalConstructor()
     ->getMock();
 $this->conditionCustomer->method('loadAttributeOptions')->willReturnSelf();
+// For a magic getter like getAttributeOption(), stub the underlying data or use a real DataObject.
 ```
 
 ### 2. Context Mocking Best Practice
@@ -130,12 +137,18 @@ public static function inputTypeProvider(): array
 
 The following functionality requires thorough testing due to security implications:
 
-### CSV Export (CSV Injection Prevention)
+### CSV Export (Formula Injection Prevention)
+
+`fputcsv()` alone does NOT protect against spreadsheet formula injection — a field beginning with
+`=`, `+`, `-`, `@`, tab, or carriage return is still executed as a formula when the CSV is opened in
+a spreadsheet. The export path explicitly neutralizes such fields (e.g. by prefixing a single quote)
+before writing, and passes an explicit `$escape` argument to `fputcsv()` for PHP 8.4 compatibility.
+
 ```php
-public function testExportCsvEscapesSpecialCharacters(): void
+public function testExportCsvNeutralizesFormulaCharacters(): void
 {
-    // Test that formulas (=, +, -, @) are properly escaped
-    // Test that quotes and commas are handled
+    // A field like "=1+1" or "@SUM(...)" must be neutralized so it is not treated as a formula.
+    // Also verify quotes and commas are handled and that no PHP 8.4 fputcsv deprecation is thrown.
 }
 ```
 

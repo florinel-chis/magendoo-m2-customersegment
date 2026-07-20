@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Management
+ * Magendoo CustomerSegment - segment matching orchestration, realtime funnel and export
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -16,7 +14,6 @@ use Magento\Customer\Model\ResourceModel\Customer\CollectionFactory as CustomerC
 use Magento\Framework\Api\FilterBuilder;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\DataObject;
 use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\LocalizedException;
@@ -27,11 +24,19 @@ use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magendoo\CustomerSegment\Api\Data\SegmentInterface;
 use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
+use Magendoo\CustomerSegment\Model\Condition\SetBasedInterface;
 use Magendoo\CustomerSegment\Model\ResourceModel\Segment as SegmentResource;
 use Psr\Log\LoggerInterface;
 
 /**
  * Segment Management Service
+ *
+ * Membership matching prefers the set-based path (a single query per condition tree) via
+ * {@see SetBasedInterface::getMatchingCustomerIds()}. When a condition tree cannot be expressed
+ * set-based it returns null and this service falls back to a per-customer validate() loop. That
+ * fallback is O(customers x leaf-queries) and is intended only for small/medium customer bases or
+ * condition types not yet resolvable set-based; large installs should keep their conditions
+ * within the set-based-resolvable subset.
  */
 class SegmentManagement implements SegmentManagementInterface
 {
@@ -45,6 +50,11 @@ class SegmentManagement implements SegmentManagementInterface
         \Magendoo\CustomerSegment\Model\Condition\Cart::class,
         \Magendoo\CustomerSegment\Model\Condition\Product::class,
     ];
+
+    /**
+     * Supported export serialization formats
+     */
+    private const ALLOWED_EXPORT_FORMATS = ['csv', 'xml'];
 
     /**
      * @var SegmentRepositoryInterface
@@ -118,6 +128,7 @@ class SegmentManagement implements SegmentManagementInterface
      * @param FilterBuilder $filterBuilder
      * @param LoggerInterface $logger
      * @param ManagerInterface $eventManager
+     * @param ObjectManagerInterface|null $objectManager
      */
     public function __construct(
         SegmentRepositoryInterface $segmentRepository,
@@ -152,11 +163,7 @@ class SegmentManagement implements SegmentManagementInterface
      */
     public function refreshSegment(int $segmentId): int
     {
-        try {
-            $segment = $this->segmentRepository->getById($segmentId);
-        } catch (NoSuchEntityException $e) {
-            throw $e;
-        }
+        $segment = $this->segmentRepository->getById($segmentId);
 
         if (!$segment->getIsActive()) {
             return 0;
@@ -170,33 +177,13 @@ class SegmentManagement implements SegmentManagementInterface
             ['segment' => $segment, 'segment_id' => $segmentId]
         );
 
-        // Clear existing customers
-        $this->segmentResource->removeAllCustomers($segmentId);
-
         // Get matching customers
         $matchingCustomers = $this->getMatchingCustomers($segment);
 
-        if (empty($matchingCustomers)) {
-            $this->segmentResource->updateCustomerCount($segmentId, 0);
-            
-            // Dispatch event after refresh (no customers assigned)
-            $this->eventManager->dispatch(
-                'magendoo_customersegment_refresh_after',
-                [
-                    'segment' => $segment,
-                    'segment_id' => $segmentId,
-                    'assigned_customers' => [],
-                    'assigned_count' => 0
-                ]
-            );
-            
-            return 0;
-        }
+        // Atomically swap the whole membership set (remove-all + mass-assign in one transaction).
+        $assignedCount = $this->segmentResource->replaceCustomers($segmentId, $matchingCustomers);
 
-        // Batch insert customers
-        $assignedCount = $this->segmentResource->massAssignCustomers($segmentId, $matchingCustomers);
-
-        // Update customer count
+        // Update customer count from the actually-assigned total
         $this->segmentResource->updateCustomerCount($segmentId, $assignedCount);
 
         $this->logger->info(__('Segment %1 refreshed: %2 customers assigned', $segmentId, $assignedCount));
@@ -229,8 +216,9 @@ class SegmentManagement implements SegmentManagementInterface
             try {
                 $this->refreshSegment($segment->getSegmentId());
             } catch (\Exception $e) {
-                $this->logger->error(__('Error refreshing segment %1: %2', 
-                    $segment->getSegmentId(), 
+                $this->logger->error(__(
+                    'Error refreshing segment %1: %2',
+                    $segment->getSegmentId(),
                     $e->getMessage()
                 ));
             }
@@ -370,13 +358,50 @@ class SegmentManagement implements SegmentManagementInterface
     /**
      * @inheritdoc
      */
+    public function updateCustomerMembership(int $customerId): void
+    {
+        $this->searchCriteriaBuilder->addFilter('is_active', 1);
+        $this->searchCriteriaBuilder->addFilter('refresh_mode', 'realtime');
+        $searchCriteria = $this->searchCriteriaBuilder->create();
+
+        $segments = $this->segmentRepository->getList($searchCriteria);
+
+        foreach ($segments->getItems() as $segment) {
+            $segmentId = (int) $segment->getSegmentId();
+
+            try {
+                if ($this->doesCustomerMatchSegment($customerId, $segmentId)) {
+                    $this->assignCustomerToSegment($customerId, $segmentId);
+                } else {
+                    $this->removeCustomerFromSegment($customerId, $segmentId);
+                }
+            } catch (\Throwable $e) {
+                $this->logger->error(__(
+                    'Error updating membership of customer %1 for segment %2: %3',
+                    $customerId,
+                    $segmentId,
+                    $e->getMessage()
+                ));
+            }
+        }
+    }
+
+    /**
+     * @inheritdoc
+     */
     public function exportSegmentCustomers(int $segmentId, string $format): string
     {
-        try {
-            $segment = $this->segmentRepository->getById($segmentId);
-        } catch (NoSuchEntityException $e) {
-            throw $e;
+        $format = strtolower(trim($format));
+        if (!in_array($format, self::ALLOWED_EXPORT_FORMATS, true)) {
+            throw new LocalizedException(__(
+                'Unsupported export format "%1". Supported formats: %2.',
+                $format,
+                implode(', ', self::ALLOWED_EXPORT_FORMATS)
+            ));
         }
+
+        // Ensure the segment exists (throws NoSuchEntityException otherwise).
+        $this->segmentRepository->getById($segmentId);
 
         $customers = $this->segmentResource->getSegmentCustomers($segmentId);
 
@@ -407,34 +432,58 @@ class SegmentManagement implements SegmentManagementInterface
     protected function getMatchingCustomers(SegmentInterface $segment): array
     {
         $conditions = $this->loadConditions($segment);
-        
+
         if (!$conditions) {
             return [];
         }
 
-        // Get all active customers
-        $collection = $this->customerCollectionFactory->create();
-        $collection->addAttributeToFilter('entity_id', ['gt' => 0]);
+        // Preferred path: resolve the whole matching set with a single set-based query (C2).
+        if ($conditions instanceof SetBasedInterface) {
+            $matchingIds = $conditions->getMatchingCustomerIds();
+            if ($matchingIds !== null) {
+                return $this->scopeToActiveCustomers($matchingIds);
+            }
+        }
+
+        // Fallback: per-customer validate() loop. Bounded but O(customers x leaf-queries) — see
+        // the class docblock for the ceiling. We only load entity ids here (no attribute payload).
+        $customerIds = $this->customerCollectionFactory->create()
+            ->addAttributeToFilter('entity_id', ['gt' => 0])
+            ->getAllIds();
 
         $matchingIds = [];
-        
-        // Process in batches to avoid memory issues
-        $collection->setPageSize(1000);
-        $pages = $collection->getLastPageNumber();
-
-        for ($currentPage = 1; $currentPage <= $pages; $currentPage++) {
-            $collection->setCurPage($currentPage);
-            
-            foreach ($collection as $customer) {
-                if ($conditions->validate($customer->getId())) {
-                    $matchingIds[] = $customer->getId();
-                }
+        foreach ($customerIds as $customerId) {
+            $customerId = (int) $customerId;
+            if ($conditions->validate($customerId)) {
+                $matchingIds[] = $customerId;
             }
-            
-            $collection->clear();
         }
 
         return $matchingIds;
+    }
+
+    /**
+     * Restrict a candidate set-based id list to real, existing customer entity ids.
+     *
+     * @param int[] $customerIds
+     * @return int[]
+     */
+    protected function scopeToActiveCustomers(array $customerIds): array
+    {
+        $customerIds = array_values(array_unique(array_filter(
+            array_map('intval', $customerIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if (empty($customerIds)) {
+            return [];
+        }
+
+        $existingIds = $this->customerCollectionFactory->create()
+            ->addAttributeToFilter('entity_id', ['in' => $customerIds])
+            ->getAllIds();
+
+        return array_map('intval', $existingIds);
     }
 
     /**
@@ -454,6 +503,14 @@ class SegmentManagement implements SegmentManagementInterface
         try {
             $conditionsArray = $this->jsonSerializer->unserialize($conditionsSerialized);
         } catch (\Exception $e) {
+            return null;
+        }
+
+        // An empty condition tree (no child conditions) must NOT match anyone. Treat it exactly like
+        // a blank conditions_serialized and return null so getMatchingCustomers()/doesCustomerMatchSegment()
+        // resolve to "nobody" instead of falling through to the validate-all fallback, which would
+        // otherwise assign the entire customer base.
+        if (!is_array($conditionsArray) || empty($conditionsArray['conditions'])) {
             return null;
         }
 
@@ -539,24 +596,30 @@ class SegmentManagement implements SegmentManagementInterface
      */
     protected function exportAsCsv($collection): string
     {
-        // Security: Use php://temp with fputcsv() to prevent CSV injection
         $fp = fopen('php://temp', 'w+');
         if ($fp === false) {
             return '';
         }
 
-        // Write header
-        fputcsv($fp, ['Customer ID', 'Email', 'First Name', 'Last Name', 'Created At']);
+        // Write header. Pass $escape explicitly so PHP 8.4 does not emit the deprecation that
+        // Magento's error handler turns into a thrown error.
+        fputcsv($fp, ['Customer ID', 'Email', 'First Name', 'Last Name', 'Created At'], ',', '"', '\\');
 
-        // Write data rows
+        // Write data rows, neutralizing spreadsheet formula injection on every field.
         foreach ($collection as $customer) {
-            fputcsv($fp, [
-                $customer->getId(),
-                $customer->getEmail(),
-                $customer->getFirstname(),
-                $customer->getLastname(),
-                $customer->getCreatedAt()
-            ]);
+            fputcsv(
+                $fp,
+                [
+                    $this->neutralizeCsvValue((string) $customer->getId()),
+                    $this->neutralizeCsvValue((string) $customer->getEmail()),
+                    $this->neutralizeCsvValue((string) $customer->getFirstname()),
+                    $this->neutralizeCsvValue((string) $customer->getLastname()),
+                    $this->neutralizeCsvValue((string) $customer->getCreatedAt())
+                ],
+                ',',
+                '"',
+                '\\'
+            );
         }
 
         // Get the content
@@ -565,6 +628,25 @@ class SegmentManagement implements SegmentManagementInterface
         fclose($fp);
 
         return $output !== false ? $output : '';
+    }
+
+    /**
+     * Neutralize CSV/spreadsheet formula injection.
+     *
+     * A field whose first character can start a formula (= + - @) or is a control character
+     * (tab, carriage return) is prefixed with a single quote so spreadsheet software treats it
+     * as literal text instead of evaluating it.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function neutralizeCsvValue(string $value): string
+    {
+        if ($value !== '' && strpbrk($value[0], "=+-@\t\r") !== false) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 
     /**

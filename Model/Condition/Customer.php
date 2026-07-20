@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Customer Condition
+ * Magendoo CustomerSegment - customer attribute condition
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -22,7 +20,7 @@ use Magento\Store\Model\StoreManagerInterface;
 /**
  * Customer Attributes Condition
  */
-class Customer extends AbstractCondition
+class Customer extends AbstractCondition implements SetBasedInterface
 {
     /**
      * @var CustomerCollectionFactory
@@ -103,7 +101,7 @@ class Customer extends AbstractCondition
     public function getInputType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'dob', 'created_at' => 'date',
             'website_id', 'store_id', 'group_id', 'gender' => 'select',
@@ -119,7 +117,7 @@ class Customer extends AbstractCondition
     public function getValueElementType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'dob', 'created_at' => 'date',
             'website_id', 'store_id', 'group_id', 'gender' => 'select',
@@ -158,14 +156,13 @@ class Customer extends AbstractCondition
                     break;
 
                 case 'group_id':
-                    $entityType = $this->eavConfig->getEntityType('customer');
-                    $attribute = $this->eavConfig->getAttribute('customer', 'group_id');
-                    $options = $attribute->getSource()->getAllOptions();
+                    $groupAttribute = $this->eavConfig->getAttribute('customer', 'group_id');
+                    $options = $groupAttribute->getSource()->getAllOptions();
                     break;
 
                 case 'gender':
-                    $attribute = $this->eavConfig->getAttribute('customer', 'gender');
-                    $options = $attribute->getSource()->getAllOptions();
+                    $genderAttribute = $this->eavConfig->getAttribute('customer', 'gender');
+                    $options = $genderAttribute->getSource()->getAllOptions();
                     break;
             }
         } catch (LocalizedException $e) {
@@ -183,7 +180,7 @@ class Customer extends AbstractCondition
     public function getDefaultOperatorOptions(): array
     {
         $type = $this->getInputType();
-        
+
         return match ($type) {
             'date' => [
                 '==' => __('is'),
@@ -219,33 +216,86 @@ class Customer extends AbstractCondition
      */
     public function validate($customer): bool
     {
+        $customerId = $this->resolveCustomerId($customer);
+        if ($customerId === null) {
+            return false;
+        }
+
+        $condition = $this->buildAttributeFilter();
+        if ($condition === null) {
+            return false;
+        }
+
+        $collection = $this->customerCollectionFactory->create();
+        $collection->addAttributeToFilter('entity_id', $customerId);
+        $collection->addAttributeToFilter($this->getAttribute(), $condition);
+
+        return $collection->getSize() > 0;
+    }
+
+    /**
+     * Resolve the full set of matching customer ids with a single collection query
+     *
+     * @return int[]|null
+     */
+    public function getMatchingCustomerIds(): ?array
+    {
+        $condition = $this->buildAttributeFilter();
+        if ($condition === null) {
+            return null;
+        }
+
+        $collection = $this->customerCollectionFactory->create();
+        $collection->addAttributeToFilter($this->getAttribute(), $condition);
+
+        return array_map('intval', $collection->getAllIds());
+    }
+
+    /**
+     * Resolve a customer id from a model or scalar id
+     *
+     * @param mixed $customer
+     * @return int|null
+     */
+    private function resolveCustomerId(mixed $customer): ?int
+    {
         if (is_numeric($customer)) {
             $customerId = (int) $customer;
         } elseif ($customer instanceof \Magento\Customer\Model\Customer) {
             $customerId = (int) $customer->getId();
         } else {
-            return false;
+            return null;
         }
 
-        $collection = $this->customerCollectionFactory->create();
-        $collection->addAttributeToSelect('*');
-        $collection->addAttributeToFilter('entity_id', $customerId);
+        return $customerId > 0 ? $customerId : null;
+    }
 
-        // Apply the condition filter
-        $attribute = $this->getAttribute();
-        $operator = $this->getOperator();
+    /**
+     * Build the collection attribute filter shared by validate() and getMatchingCustomerIds()
+     *
+     * @return array|string|null
+     */
+    private function buildAttributeFilter(): array|string|null
+    {
+        $attribute = (string) $this->getAttribute();
+        if ($attribute === '') {
+            return null;
+        }
+
+        $operator = (string) $this->getOperator();
         $value = $this->getValue();
 
-        // Handle date attributes
-        if ($this->getInputType() === 'date' && $value) {
-            $value = date('Y-m-d', strtotime($value));
+        // Normalise date input to a UTC-aware Y-m-d so comparisons are timezone-consistent.
+        if ($this->getInputType() === 'date' && $value !== null && $value !== '') {
+            if ($operator === 'between') {
+                [$from, $to] = $this->splitRange($value);
+                $value = [$this->normalizeDate($from), $this->normalizeDate($to)];
+            } elseif (!is_array($value)) {
+                $value = $this->normalizeDate((string) $value);
+            }
         }
 
-        // Build the filter condition
-        $condition = $this->translateOperatorToSql($operator, $value);
-        $collection->addAttributeToFilter($attribute, $condition);
-
-        return $collection->getSize() > 0;
+        return $this->translateOperatorToSql($operator, $value);
     }
 
     /**
@@ -268,8 +318,8 @@ class Customer extends AbstractCondition
             '!{}' => ['nlike' => '%' . $value . '%'],
             '^=' => ['like' => $value . '%'],
             '$=' => ['like' => '%' . $value],
-            '()' => ['in' => is_array($value) ? $value : explode(',', $value)],
-            '!()' => ['nin' => is_array($value) ? $value : explode(',', $value)],
+            '()' => ['in' => is_array($value) ? $value : explode(',', (string) $value)],
+            '!()' => ['nin' => is_array($value) ? $value : explode(',', (string) $value)],
             'between' => $this->buildBetweenCondition($value),
             default => ['eq' => $value],
         };
@@ -283,15 +333,44 @@ class Customer extends AbstractCondition
      */
     protected function buildBetweenCondition(mixed $value): array
     {
+        [$from, $to] = $this->splitRange($value);
+
+        return ['from' => $from, 'to' => $to];
+    }
+
+    /**
+     * Split a range value (array or comma separated string) into a [from, to] pair
+     *
+     * @param mixed $value
+     * @return array{0: string, 1: string}
+     */
+    private function splitRange(mixed $value): array
+    {
         if (is_array($value)) {
-            return ['from' => $value[0] ?? '', 'to' => $value[1] ?? ''];
+            return [(string) ($value[0] ?? ''), (string) ($value[1] ?? '')];
         }
 
-        // Parse comma-separated values
-        $values = explode(',', $value);
-        return [
-            'from' => trim($values[0] ?? ''),
-            'to' => trim($values[1] ?? '')
-        ];
+        $values = explode(',', (string) $value);
+
+        return [trim($values[0] ?? ''), trim($values[1] ?? '')];
+    }
+
+    /**
+     * Normalise a date value to a UTC Y-m-d string
+     *
+     * @param string $value
+     * @return string
+     */
+    private function normalizeDate(string $value): string
+    {
+        if ($value === '') {
+            return $value;
+        }
+
+        try {
+            return (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->format('Y-m-d');
+        } catch (\Exception $e) {
+            return $value;
+        }
     }
 }

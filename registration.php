@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment module registration
+ * Magendoo CustomerSegment - module registration
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);

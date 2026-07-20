@@ -107,7 +107,7 @@ curl -H "Authorization: Bearer TOKEN" \
   "is_active": true,
   "conditions_serialized": "{\"type\":\"Magendoo\\CustomerSegment\\Model\\Condition\\Combine\",...}",
   "refresh_mode": "cron",
-  "cron_expression": "0 2 * * *",
+  "cron_expression": "*/5 * * * *",
   "customer_count": 150,
   "last_refreshed": "2024-03-31 10:00:00",
   "created_at": "2024-01-01 00:00:00",
@@ -327,29 +327,31 @@ true
 
 ---
 
-#### Get Segment Customers
+#### Export Segment Customers
 
 ```
-GET /V1/customer-segments/:segmentId/customers
+GET /V1/customer-segments/:segmentId/customers?format=csv|xml
 ```
 
-**Example:**
+Exports the customers assigned to a segment. The `format` query parameter is **required** and must be
+`csv` or `xml`. The endpoint returns a single serialized **string** (a CSV or XML document), not a JSON
+array. CSV output neutralizes leading formula characters to prevent spreadsheet formula injection.
+
+**Example (CSV):**
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  "http://127.0.0.1:8083/rest/V1/customer-segments/1/customers"
+  "http://127.0.0.1:8083/rest/V1/customer-segments/1/customers?format=csv"
 ```
 
-**Response:**
+**Response (a JSON-encoded string):**
 ```json
-[
-  {
-    "customer_id": 1,
-    "email": "customer@example.com",
-    "firstname": "John",
-    "lastname": "Doe",
-    "assigned_at": "2024-03-31 10:00:00"
-  }
-]
+"customer_id,email,firstname,lastname,assigned_at\n1,customer@example.com,John,Doe,2024-03-31 10:00:00\n"
+```
+
+**Example (XML):**
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "http://127.0.0.1:8083/rest/V1/customer-segments/1/customers?format=xml"
 ```
 
 ---
@@ -612,5 +614,5 @@ echo "Segment has {$customerCount} customers";
 
 ---
 
-**Last Updated**: 2026-04-01  
-**Version**: 1.0.0
+**Last Updated**: 2026-07-20  
+**Version**: 2.0.0

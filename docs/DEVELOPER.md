@@ -102,7 +102,6 @@ app/code/Magendoo/CustomerSegment/
 │   ├── Segment.php                   # Main entity model
 │   ├── SegmentRepository.php         # Repository
 │   ├── SegmentManagement.php         # Business operations
-│   ├── SqlBuilder.php                # Batch SQL validation
 │   └── Source/                       # Option sources
 │       ├── RefreshMode.php
 │       └── Status.php
@@ -125,6 +124,12 @@ app/code/Magendoo/CustomerSegment/
 │       └── Form/
 │           ├── MatchedCustomersDataProvider.php
 │           └── SegmentDataProvider.php
+├── Setup/                            # Install/upgrade patches
+│   └── Patch/
+│       ├── Schema/
+│       │   └── DropLegacyDuplicateIndexes.php
+│       └── Data/
+│           └── MigrateConditionsSerialized.php
 ├── etc/                              # Configuration
 │   ├── module.xml
 │   ├── db_schema.xml                 # DB schema
@@ -148,10 +153,16 @@ app/code/Magendoo/CustomerSegment/
         │   └── customersegment_segment_index.xml
         ├── templates/
         │   └── segment/
-        │       └── edit.phtml
-        └── ui_component/
-            ├── customersegment_segment_form.xml
-            └── customersegment_segment_listing.xml
+        │       └── edit/
+        │           ├── conditions.phtml
+        │           └── matched_customers.phtml
+        ├── ui_component/
+        │   ├── customersegment_segment_form.xml
+        │   ├── customersegment_segment_listing.xml
+        │   └── customersegment_segment_matched_customers.xml
+        └── web/
+            ├── js/grid/customer-grid.js
+            └── template/grid/customer-grid.html
 ```
 
 ---
@@ -168,14 +179,23 @@ The condition system is based on Magento's Rule module:
 
 ### Condition Class Hierarchy
 
+`Combine` is the aggregator (AND/OR) that holds children; the leaf conditions each extend
+`AbstractCondition` directly and evaluate a single customer attribute or behaviour.
+
 ```
+Magento\Rule\Model\Condition\Combine
+    └── Magendoo\CustomerSegment\Model\Condition\Combine        # aggregator (all/any)
+
 Magento\Rule\Model\Condition\AbstractCondition
-    └── Magendoo\CustomerSegment\Model\Condition\Combine
-            └── Magendoo\CustomerSegment\Model\Condition\Customer
-            └── Magendoo\CustomerSegment\Model\Condition\Order
-            └── Magendoo\CustomerSegment\Model\Condition\Cart
-            └── Magendoo\CustomerSegment\Model\Condition\Product
+    ├── Magendoo\CustomerSegment\Model\Condition\Customer       # customer attributes
+    ├── Magendoo\CustomerSegment\Model\Condition\Order          # order history
+    ├── Magendoo\CustomerSegment\Model\Condition\Cart           # shopping cart
+    └── Magendoo\CustomerSegment\Model\Condition\Product        # product interactions
 ```
+
+Leaf conditions that can express themselves as a single query implement
+`Model\Condition\SetBasedInterface::getMatchingCustomerIds()` for set-based matching; those that
+cannot return `null` and fall back to per-customer `validate()`.
 
 ### Creating a Custom Condition
 
@@ -264,9 +284,17 @@ interface SegmentManagementInterface
 {
     public function refreshSegment(int $segmentId): int;
     public function refreshAllSegments(): void;
+    public function massRefresh(array $segmentIds): int;
+    public function getCustomerSegmentIds(int $customerId): array;
     public function getCustomerSegments(int $customerId): array;
+    public function assignCustomerToSegment(int $customerId, int $segmentId): bool;
+    public function removeCustomerFromSegment(int $customerId, int $segmentId): bool;
     public function isCustomerInSegment(int $customerId, int $segmentId): bool;
     public function doesCustomerMatchSegment(int $customerId, int $segmentId): bool;
+    // Re-evaluates one customer against active realtime segments (called by realtime observers).
+    public function updateCustomerMembership(int $customerId): void;
+    // Returns a CSV or XML string; $format is required and must be "csv" or "xml".
+    public function exportSegmentCustomers(int $segmentId, string $format): string;
 }
 ```
 
@@ -290,12 +318,12 @@ interface SegmentManagementInterface
 
 | Event Name | Parameters | Description |
 |------------|------------|-------------|
-| `magendoo_customersegment_segment_save_before` | `segment` | Before saving |
-| `magendoo_customersegment_segment_save_after` | `segment` | After saving |
-| `magendoo_customersegment_segment_refresh_before` | `segment_id` | Before refresh |
-| `magendoo_customersegment_segment_refresh_after` | `segment_id`, `customer_count` | After refresh |
-| `magendoo_customersegment_customer_assigned` | `segment_id`, `customer_id` | Customer added |
-| `magendoo_customersegment_customer_removed` | `segment_id`, `customer_id` | Customer removed |
+| `magendoo_customersegment_segment_save_before` | `segment` | Before saving (ORM) |
+| `magendoo_customersegment_segment_save_after` | `segment` | After saving (ORM) |
+| `magendoo_customersegment_refresh_before` | `segment`, `segment_id` | Before refresh |
+| `magendoo_customersegment_refresh_after` | `segment`, `segment_id`, `assigned_customers`, `assigned_count` | After refresh |
+| `magendoo_customersegment_customer_assigned` | `customer_id`, `segment_id` | Customer added |
+| `magendoo_customersegment_customer_removed` | `customer_id`, `segment_id` | Customer removed |
 | `magendoo_customersegment_conditions` | `additional` | Add custom conditions |
 
 ### Example Observer
@@ -491,12 +519,16 @@ SELECT * FROM magendoo_customer_segment_log ORDER BY created_at DESC;
 
 ## Performance Considerations
 
-1. **Batch Processing**: Customer validation happens in batches of 1000
-2. **Indexing**: Customer grid flat is used for faster queries
-3. **Caching**: Segment conditions are cached in config cache
-4. **Lazy Loading**: Customer assignments loaded on demand
+1. **Set-based matching**: Conditions that can be expressed as a single query resolve the whole
+   matching customer set in one SELECT (`SetBasedInterface::getMatchingCustomerIds()`), instead of
+   validating one customer at a time. Conditions that cannot fall back to per-customer `validate()`.
+2. **Atomic refresh**: Remove-all + mass-assign run inside a single transaction, so a segment is
+   never observed empty or half-populated mid-refresh.
+3. **Realtime**: Customer events re-evaluate only the changed customer against active realtime
+   segments (`updateCustomerMembership()`), never a full rescan.
+4. **Batched inserts**: Membership rows are written in bulk.
 
 ---
 
-**Last Updated**: 2026-04-01  
-**Version**: 1.0.0
+**Last Updated**: 2026-07-20  
+**Version**: 2.0.0

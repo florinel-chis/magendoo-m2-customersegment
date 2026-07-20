@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Management Interface
+ * Magendoo CustomerSegment - segment management service contract
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -13,10 +11,11 @@ declare(strict_types=1);
 namespace Magendoo\CustomerSegment\Api;
 
 use Magento\Framework\Exception\CouldNotSaveException;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
 
 /**
- * Segment management interface
+ * Orchestrates segment membership: refresh, per-customer realtime re-evaluation and customer export.
  *
  * @api
  */
@@ -102,12 +101,24 @@ interface SegmentManagementInterface
     public function massRefresh(array $segmentIds): int;
 
     /**
+     * Re-evaluate a single customer against all active realtime segments and sync membership.
+     *
+     * Assigns the customer to every active realtime segment they match and removes them from the
+     * ones they no longer match. Does NOT rescan the whole customer base.
+     *
+     * @param int $customerId
+     * @return void
+     */
+    public function updateCustomerMembership(int $customerId): void;
+
+    /**
      * Export segment customers
      *
      * @param int $segmentId
      * @param string $format csv|xml
      * @return string File content
      * @throws NoSuchEntityException
+     * @throws LocalizedException When an unsupported format is requested
      */
     public function exportSegmentCustomers(int $segmentId, string $format): string;
 }

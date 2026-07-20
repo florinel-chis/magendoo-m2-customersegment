@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Save Controller
+ * Magendoo CustomerSegment - Admin segment save controller
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -92,7 +90,10 @@ class Save extends Action implements HttpPostActionInterface
             // Populate segment data
             $segment->setName($data['name'] ?? '');
             $segment->setDescription($data['description'] ?? '');
-            $segment->setIsActive(isset($data['is_active']) && $data['is_active'] === '1');
+            $segment->setIsActive(
+                isset($data['is_active'])
+                && filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN)
+            );
             $segment->setRefreshMode($data['refresh_mode'] ?? SegmentInterface::REFRESH_MODE_MANUAL);
             $segment->setCronExpression($data['cron_expression'] ?? null);
 
@@ -145,5 +146,4 @@ class Save extends Action implements HttpPostActionInterface
     {
         return $this->segmentFactory->create();
     }
-
 }

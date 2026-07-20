@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Repository
+ * Magendoo CustomerSegment - Segment repository (partial-update-safe persistence)
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -29,7 +27,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Reflection\DataObjectProcessor;
 
 /**
- * Segment Repository
+ * Persists and loads customer segments, merging partial DTOs onto stored rows.
  */
 class SegmentRepository implements SegmentRepositoryInterface
 {
@@ -79,11 +77,6 @@ class SegmentRepository implements SegmentRepositoryInterface
     protected ExtensibleDataObjectConverter $extensibleDataObjectConverter;
 
     /**
-     * @var array
-     */
-    protected array $registry = [];
-
-    /**
      * @param ResourceSegment $resource
      * @param SegmentFactory $segmentFactory
      * @param SegmentCollectionFactory $segmentCollectionFactory
@@ -121,19 +114,32 @@ class SegmentRepository implements SegmentRepositoryInterface
      */
     public function save(SegmentInterface $segment): SegmentInterface
     {
-        $segmentData = $this->extensibleDataObjectConverter->toNestedArray(
-            $segment,
-            [],
-            SegmentInterface::class
+        $segmentModel = $this->segmentFactory->create();
+        $segmentId = $segment->getSegmentId();
+
+        if ($segmentId) {
+            // Load the persisted row first so an unset field in a partial DTO
+            // (e.g. REST PUT {segment_id, name}) keeps its stored value instead
+            // of being reset to a defaulted getter value.
+            $this->resource->load($segmentModel, $segmentId);
+            if (!$segmentModel->getId()) {
+                throw new NoSuchEntityException(
+                    __('Segment with id "%1" does not exist.', $segmentId)
+                );
+            }
+        }
+
+        // Overlay only the fields the caller actually provided.
+        $providedData = $this->extractProvidedData($segment);
+
+        // customer_count and last_refreshed are server-managed (refresh path only);
+        // they must never be settable through save().
+        unset(
+            $providedData[SegmentInterface::CUSTOMER_COUNT],
+            $providedData[SegmentInterface::LAST_REFRESHED]
         );
 
-        $segmentModel = $this->segmentFactory->create();
-        
-        if ($segment->getSegmentId()) {
-            $this->resource->load($segmentModel, $segment->getSegmentId());
-        }
-        
-        $segmentModel->addData($segmentData);
+        $segmentModel->addData($providedData);
 
         try {
             $this->resource->save($segmentModel);
@@ -141,10 +147,31 @@ class SegmentRepository implements SegmentRepositoryInterface
             throw new CouldNotSaveException(__($exception->getMessage()));
         }
 
-        // Clear registry cache
-        unset($this->registry[$segmentModel->getId()]);
-
         return $this->getById((int) $segmentModel->getId());
+    }
+
+    /**
+     * Extract only the fields explicitly provided on the incoming data object
+     *
+     * The raw data array of a DataObject/extensible model contains only the keys
+     * that were set (via the REST input processor or the admin form), so unset
+     * fields are absent and therefore preserved on a partial update. A non
+     * DataObject implementation falls back to the full nested array.
+     *
+     * @param SegmentInterface $segment
+     * @return array
+     */
+    private function extractProvidedData(SegmentInterface $segment): array
+    {
+        if ($segment instanceof \Magento\Framework\DataObject) {
+            return $segment->getData();
+        }
+
+        return $this->extensibleDataObjectConverter->toNestedArray(
+            $segment,
+            [],
+            SegmentInterface::class
+        );
     }
 
     /**
@@ -152,18 +179,14 @@ class SegmentRepository implements SegmentRepositoryInterface
      */
     public function getById(int $segmentId): SegmentInterface
     {
-        if (!isset($this->registry[$segmentId])) {
-            $segment = $this->segmentFactory->create();
-            $this->resource->load($segment, $segmentId);
-            
-            if (!$segment->getId()) {
-                throw new NoSuchEntityException(__('Segment with id "%1" does not exist.', $segmentId));
-            }
-            
-            $this->registry[$segmentId] = $segment;
+        $segment = $this->segmentFactory->create();
+        $this->resource->load($segment, $segmentId);
+
+        if (!$segment->getId()) {
+            throw new NoSuchEntityException(__('Segment with id "%1" does not exist.', $segmentId));
         }
 
-        return $this->registry[$segmentId];
+        return $segment;
     }
 
     /**
@@ -203,11 +226,17 @@ class SegmentRepository implements SegmentRepositoryInterface
      */
     public function delete(SegmentInterface $segment): bool
     {
+        $segmentModel = $this->segmentFactory->create();
+        $this->resource->load($segmentModel, $segment->getSegmentId());
+
+        if (!$segmentModel->getId()) {
+            throw new NoSuchEntityException(
+                __('Segment with id "%1" does not exist.', $segment->getSegmentId())
+            );
+        }
+
         try {
-            $segmentModel = $this->segmentFactory->create();
-            $this->resource->load($segmentModel, $segment->getSegmentId());
             $this->resource->delete($segmentModel);
-            unset($this->registry[$segment->getSegmentId()]);
         } catch (\Exception $exception) {
             throw new CouldNotDeleteException(__($exception->getMessage()));
         }

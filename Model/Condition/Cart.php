@@ -1,32 +1,28 @@
 <?php
 /**
- * Magendoo CustomerSegment Cart Condition
+ * Magendoo CustomerSegment - shopping cart condition
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Model\Condition;
 
-use Magento\Checkout\Model\Session as CheckoutSession;
 use Magento\Framework\App\ResourceConnection;
-use Magento\Quote\Model\ResourceModel\Quote\CollectionFactory as QuoteCollectionFactory;
 use Magento\Rule\Model\Condition\AbstractCondition;
 use Magento\Rule\Model\Condition\Context;
 
 /**
  * Shopping Cart Condition
  */
-class Cart extends AbstractCondition
+class Cart extends AbstractCondition implements SetBasedInterface
 {
     /**
-     * @var QuoteCollectionFactory
+     * Operators that negate at the customer level.
      */
-    protected QuoteCollectionFactory $quoteCollectionFactory;
+    private const NEGATIVE_OPERATORS = ['!=', '!{}'];
 
     /**
      * @var ResourceConnection
@@ -34,27 +30,16 @@ class Cart extends AbstractCondition
     protected ResourceConnection $resourceConnection;
 
     /**
-     * @var CheckoutSession|null
-     */
-    protected ?CheckoutSession $checkoutSession;
-
-    /**
      * @param Context $context
-     * @param QuoteCollectionFactory $quoteCollectionFactory
      * @param ResourceConnection $resourceConnection
      * @param array $data
-     * @param CheckoutSession|null $checkoutSession
      */
     public function __construct(
         Context $context,
-        QuoteCollectionFactory $quoteCollectionFactory,
         ResourceConnection $resourceConnection,
-        array $data = [],
-        ?CheckoutSession $checkoutSession = null
+        array $data = []
     ) {
-        $this->quoteCollectionFactory = $quoteCollectionFactory;
         $this->resourceConnection = $resourceConnection;
-        $this->checkoutSession = $checkoutSession;
         parent::__construct($context, $data);
     }
 
@@ -97,12 +82,11 @@ class Cart extends AbstractCondition
     public function getInputType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'cart_subtotal' => 'price',
-            'cart_items_count' => 'numeric',
+            'cart_items_count', 'cart_last_activity' => 'numeric',
             'has_active_cart' => 'select',
-            'cart_last_activity' => 'numeric',
             default => 'string',
         };
     }
@@ -115,7 +99,7 @@ class Cart extends AbstractCondition
     public function getValueElementType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'has_active_cart' => 'select',
             default => 'text',
@@ -147,23 +131,29 @@ class Cart extends AbstractCondition
     public function getDefaultOperatorOptions(): array
     {
         $attribute = $this->getAttribute();
-        
-        return match ($attribute) {
-            'has_active_cart' => [
-                '==' => __('is'),
-            ],
-            'cart_last_activity', 'cart_items_count' => [
-                '==' => __('equals'),
-                '>' => __('greater than'),
-                '<' => __('less than'),
-            ],
-            default => [
+
+        if ($attribute === 'has_active_cart') {
+            return ['==' => __('is')];
+        }
+
+        if ($attribute === 'cart_products') {
+            return [
                 '==' => __('is'),
                 '!=' => __('is not'),
                 '{}' => __('contains'),
                 '!{}' => __('does not contain'),
-            ],
-        };
+            ];
+        }
+
+        // Numeric attributes: cart_subtotal, cart_items_count, cart_last_activity.
+        return [
+            '==' => __('equals'),
+            '!=' => __('does not equal'),
+            '>' => __('greater than'),
+            '<' => __('less than'),
+            '>=' => __('equals or greater than'),
+            '<=' => __('equals or less than'),
+        ];
     }
 
     /**
@@ -174,20 +164,13 @@ class Cart extends AbstractCondition
      */
     public function validate($customer): bool
     {
-        if (is_numeric($customer)) {
-            $customerId = (int) $customer;
-        } elseif ($customer instanceof \Magento\Customer\Model\Customer) {
-            $customerId = (int) $customer->getId();
-        } else {
+        $customerId = $this->resolveCustomerId($customer);
+        if ($customerId === null) {
             return false;
         }
 
-        if (!$customerId) {
-            return false;
-        }
-
-        $attribute = $this->getAttribute();
-        $operator = $this->getOperator();
+        $attribute = (string) $this->getAttribute();
+        $operator = (string) $this->getOperator();
         $value = $this->getValue();
 
         $cartData = $this->getCustomerCartData($customerId);
@@ -196,7 +179,36 @@ class Cart extends AbstractCondition
     }
 
     /**
-     * Get customer cart data
+     * Resolve matching customer ids for the set-resolvable "has active cart = yes" case
+     *
+     * Subtotal/items/last-activity depend on each customer's most-recent active quote and the
+     * negative/empty cases require the full customer universe, so those return null (fall back).
+     *
+     * @return int[]|null
+     */
+    public function getMatchingCustomerIds(): ?array
+    {
+        if ($this->getAttribute() !== 'has_active_cart'
+            || (string) $this->getOperator() !== '=='
+            || (string) $this->getValue() !== '1'
+        ) {
+            return null;
+        }
+
+        $connection = $this->resourceConnection->getConnection();
+        $quoteTable = $this->resourceConnection->getTableName('quote');
+
+        $select = $connection->select()
+            ->distinct(true)
+            ->from($quoteTable, ['customer_id'])
+            ->where('is_active = ?', 1)
+            ->where('customer_id IS NOT NULL');
+
+        return array_map('intval', $connection->fetchCol($select));
+    }
+
+    /**
+     * Get customer cart data (most recent active quote)
      *
      * @param int $customerId
      * @return array
@@ -207,7 +219,6 @@ class Cart extends AbstractCondition
         $quoteTable = $this->resourceConnection->getTableName('quote');
         $quoteItemTable = $this->resourceConnection->getTableName('quote_item');
 
-        // Get the active quote
         $select = $connection->select()
             ->from($quoteTable, ['entity_id', 'subtotal', 'updated_at', 'items_count'])
             ->where('customer_id = ?', $customerId)
@@ -227,7 +238,6 @@ class Cart extends AbstractCondition
             ];
         }
 
-        // Get products in cart
         $selectItems = $connection->select()
             ->from($quoteItemTable, ['sku'])
             ->where('quote_id = ?', $quote['entity_id'])
@@ -235,11 +245,13 @@ class Cart extends AbstractCondition
 
         $skus = $connection->fetchCol($selectItems);
 
-        // Calculate days since activity
         $lastActivity = $quote['updated_at'] ?? null;
         $daysSince = null;
         if ($lastActivity) {
-            $daysSince = (int) ((time() - strtotime($lastActivity)) / 86400);
+            $activityTs = $this->toUtcTimestamp((string) $lastActivity);
+            if ($activityTs !== null) {
+                $daysSince = (int) floor((time() - $activityTs) / 86400);
+            }
         }
 
         return [
@@ -262,37 +274,17 @@ class Cart extends AbstractCondition
      */
     protected function validateCartCondition(array $cartData, string $attribute, string $operator, mixed $value): bool
     {
+        if ($attribute === 'has_active_cart') {
+            $hasCart = (bool) ($cartData['has_active_cart'] ?? false);
+            return (string) $value === '1' ? $hasCart : !$hasCart;
+        }
+
+        if ($attribute === 'cart_products') {
+            return $this->validateCartProducts($cartData['products'] ?? [], $operator, (string) $value);
+        }
+
         $actualValue = $cartData[$attribute] ?? null;
 
-        // Handle has_active_cart as boolean
-        if ($attribute === 'has_active_cart') {
-            $hasCart = (bool) $actualValue;
-            return $value === '1' ? $hasCart : !$hasCart;
-        }
-
-        // Handle cart products (SKU matching)
-        if ($attribute === 'cart_products') {
-            $products = $cartData['products'] ?? [];
-            $searchSku = strtolower(trim($value));
-            
-            foreach ($products as $sku) {
-                $match = match ($operator) {
-                    '==' => strtolower($sku) === $searchSku,
-                    '!=' => strtolower($sku) !== $searchSku,
-                    '{}' => str_contains(strtolower($sku), $searchSku),
-                    '!{}' => !str_contains(strtolower($sku), $searchSku),
-                    default => false,
-                };
-                
-                if ($match) {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
-
-        // Numeric comparisons
         if (is_numeric($actualValue) && is_numeric($value)) {
             $actualValue = (float) $actualValue;
             $value = (float) $value;
@@ -309,5 +301,81 @@ class Cart extends AbstractCondition
         }
 
         return false;
+    }
+
+    /**
+     * Validate SKU membership; negation matches only when NO cart line satisfies the positive predicate
+     *
+     * @param array $products
+     * @param string $operator
+     * @param string $value
+     * @return bool
+     */
+    private function validateCartProducts(array $products, string $operator, string $value): bool
+    {
+        $searchSku = strtolower(trim($value));
+        $isNegative = in_array($operator, self::NEGATIVE_OPERATORS, true);
+
+        $positiveOperator = match ($operator) {
+            '!=' => '==',
+            '!{}' => '{}',
+            default => $operator,
+        };
+
+        $anyMatch = false;
+        foreach ($products as $sku) {
+            $sku = strtolower((string) $sku);
+            $match = match ($positiveOperator) {
+                '==' => $sku === $searchSku,
+                '{}' => $searchSku !== '' && str_contains($sku, $searchSku),
+                default => false,
+            };
+
+            if ($match) {
+                $anyMatch = true;
+                break;
+            }
+        }
+
+        // Empty cart falls through as $anyMatch === false: "does not contain X" is true, "contains X" is false.
+        return $isNegative ? !$anyMatch : $anyMatch;
+    }
+
+    /**
+     * Parse a stored (UTC) timestamp string into a UTC epoch
+     *
+     * @param string $value
+     * @return int|null
+     */
+    private function toUtcTimestamp(string $value): ?int
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->getTimestamp();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Resolve a customer id from a model or scalar id
+     *
+     * @param mixed $customer
+     * @return int|null
+     */
+    private function resolveCustomerId(mixed $customer): ?int
+    {
+        if (is_numeric($customer)) {
+            $customerId = (int) $customer;
+        } elseif ($customer instanceof \Magento\Customer\Model\Customer) {
+            $customerId = (int) $customer->getId();
+        } else {
+            return null;
+        }
+
+        return $customerId > 0 ? $customerId : null;
     }
 }

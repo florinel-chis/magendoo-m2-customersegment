@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Form Data Provider
+ * Magendoo CustomerSegment - segment form data provider
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -76,31 +74,32 @@ class SegmentDataProvider extends ModifierPoolDataProvider
         }
 
         $items = $this->collection->getItems();
-        /** @var \Magendoo\CustomerSegment\Model\Segment $segment */
         foreach ($items as $segment) {
+            /** @var \Magendoo\CustomerSegment\Model\Segment $segment */
             $data = $segment->getData();
-            
+
             // Format conditions for the form
             $conditionsArray = $segment->getConditionsArray();
             if ($conditionsArray) {
                 $data['rule']['conditions'] = $conditionsArray;
             }
-            
+
             $this->loadedData[$segment->getId()] = $data;
         }
 
         $data = $this->dataPersistor->get('customersegment_segment');
         if (!empty($data)) {
+            /** @var \Magendoo\CustomerSegment\Model\Segment $segment */
             $segment = $this->collection->getNewEmptyItem();
             $segment->setData($data);
-            
+
             $loadedItem = $segment->getData();
             // Format conditions for the form
             $conditionsArray = $segment->getConditionsArray();
             if ($conditionsArray) {
                 $loadedItem['rule']['conditions'] = $conditionsArray;
             }
-            
+
             $this->loadedData[$segment->getId()] = $loadedItem;
             $this->dataPersistor->clear('customersegment_segment');
         }

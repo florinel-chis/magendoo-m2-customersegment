@@ -1,17 +1,16 @@
 <?php
 /**
- * Magendoo CustomerSegment Order Condition Test
+ * Magendoo CustomerSegment - order history condition test
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Test\Unit\Model\Condition;
 
+use Magendoo\CustomerSegment\Model\Condition\Order;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Select;
@@ -19,27 +18,25 @@ use Magento\Rule\Model\Condition\Context;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Magendoo\CustomerSegment\Model\Condition\Order;
 
 class OrderTest extends TestCase
 {
-    /** @var Context|MockObject */
+    /** @var Context&MockObject */
     private $context;
 
-    /** @var OrderCollectionFactory|MockObject */
+    /** @var OrderCollectionFactory&MockObject */
     private $orderCollectionFactory;
 
-    /** @var ResourceConnection|MockObject */
+    /** @var ResourceConnection&MockObject */
     private $resourceConnection;
 
-    /** @var AdapterInterface|MockObject */
+    /** @var AdapterInterface&MockObject */
     private $connection;
 
-    /** @var Select|MockObject */
+    /** @var Select&MockObject */
     private $select;
 
-    /** @var Order */
-    private $order;
+    private Order $order;
 
     protected function setUp(): void
     {
@@ -48,8 +45,7 @@ class OrderTest extends TestCase
         $this->resourceConnection = $this->createMock(ResourceConnection::class);
         $this->connection = $this->createMock(AdapterInterface::class);
         $this->select = $this->createMock(Select::class);
-        
-        // Create SUT once in setUp
+
         $this->order = new Order(
             $this->context,
             $this->orderCollectionFactory,
@@ -58,33 +54,35 @@ class OrderTest extends TestCase
     }
 
     /**
-     * Helper to reduce DB mock boilerplate duplication
+     * Wire up the connection + a fully-fluent Select mock. Fetch results are set per test.
      */
-    private function setupDbMock(array $fetchRowResult): void
+    private function stubConnection(): void
     {
         $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturn('sales_order');
+        $this->resourceConnection->method('getTableName')->willReturnCallback(fn ($table) => $table);
         $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchRow')->willReturn($fetchRowResult);
+        $this->connection->method('quote')->willReturnCallback(fn ($v) => "'" . $v . "'");
+        $this->connection->method('quoteInto')->willReturnCallback(fn ($t, $v) => $t . $v);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        foreach (['from', 'columns', 'where', 'reset', 'distinct', 'join', 'limit', 'order'] as $method) {
+            $this->select->method($method)->willReturnSelf();
+        }
     }
 
     public function testLoadAttributeOptionsSetsExpectedAttributes(): void
     {
         $result = $this->order->loadAttributeOptions();
         $this->assertSame($this->order, $result);
-        
+
         $options = $this->order->getAttributeOption();
-        $this->assertIsArray($options);
-        $this->assertArrayHasKey('total_orders', $options);
-        $this->assertArrayHasKey('total_revenue', $options);
-        $this->assertArrayHasKey('average_order_value', $options);
-        $this->assertArrayHasKey('first_order_date', $options);
-        $this->assertArrayHasKey('last_order_date', $options);
-        $this->assertArrayHasKey('total_items', $options);
+        foreach (
+            [
+                'total_orders', 'total_revenue', 'average_order_value',
+                'first_order_date', 'last_order_date', 'total_items',
+            ] as $key
+        ) {
+            $this->assertArrayHasKey($key, $options);
+        }
     }
 
     public function testGetInputTypeReturnsNumericForTotalOrders(): void
@@ -157,50 +155,42 @@ class OrderTest extends TestCase
     {
         $this->order->setAttribute('total_orders');
         $operators = $this->order->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('>', $operators);
-        $this->assertArrayHasKey('<', $operators);
-        $this->assertArrayHasKey('>=', $operators);
-        $this->assertArrayHasKey('<=', $operators);
+
+        foreach (['==', '!=', '>', '<', '>=', '<='] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testGetDefaultOperatorOptionsForDate(): void
     {
         $this->order->setAttribute('first_order_date');
         $operators = $this->order->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('>', $operators);
-        $this->assertArrayHasKey('<', $operators);
+
+        foreach (['==', '!=', '>', '<'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testGetDefaultOperatorOptionsForSelect(): void
     {
         $this->order->setAttribute('payment_method');
         $operators = $this->order->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('()', $operators);
-        $this->assertArrayHasKey('!()', $operators);
+
+        foreach (['==', '!=', '()', '!()'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
-    public function testValidateWithNumericCustomerId(): void
+    public function testValidateAggregateGreaterThan(): void
     {
-        $this->setupDbMock([
-            'total_orders' => 5,
-            'total_revenue' => 1000,
-        ]);
+        $this->stubConnection();
+        $this->connection->method('fetchRow')->willReturn(['total_orders' => 5]);
 
         $this->order->setAttribute('total_orders');
         $this->order->setOperator('>');
         $this->order->setValue(3);
 
-        $result = $this->order->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->order->validate(1));
     }
 
     public function testValidateWithCustomerObject(): void
@@ -208,68 +198,122 @@ class OrderTest extends TestCase
         $customerModel = $this->createMock(\Magento\Customer\Model\Customer::class);
         $customerModel->method('getId')->willReturn(1);
 
-        $this->setupDbMock(['total_revenue' => 150.00]);
+        $this->stubConnection();
+        $this->connection->method('fetchRow')->willReturn(['total_revenue' => 150.00]);
 
         $this->order->setAttribute('total_revenue');
         $this->order->setOperator('>=');
         $this->order->setValue(100);
 
-        $result = $this->order->validate($customerModel);
-        $this->assertTrue($result);
+        $this->assertTrue($this->order->validate($customerModel));
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $result = $this->order->validate('not-a-valid-customer');
-        $this->assertFalse($result);
+        $this->assertFalse($this->order->validate('not-a-valid-customer'));
     }
 
-    public function testValidateReturnsFalseWhenNoOrders(): void
+    /**
+     * Zero-order customer: COALESCE-ed revenue is 0, so "revenue > 0" is FALSE.
+     */
+    public function testValidateRevenueGreaterThanIsFalseForZeroOrderCustomer(): void
     {
-        $this->setupDbMock([]);
+        $this->stubConnection();
+        $this->connection->method('fetchRow')->willReturn([]);
 
-        // Test with non-total_orders attribute to trigger early return
         $this->order->setAttribute('total_revenue');
         $this->order->setOperator('>');
         $this->order->setValue(0);
 
-        $result = $this->order->validate(1);
-        $this->assertFalse($result);
+        $this->assertFalse($this->order->validate(1));
     }
 
-    public function testValidateWithTotalOrdersAttribute(): void
+    /**
+     * Zero-order customer: "revenue < 100" is TRUE (0 < 100).
+     */
+    public function testValidateRevenueLessThanIsTrueForZeroOrderCustomer(): void
     {
-        $this->setupDbMock(['total_orders' => 5]);
+        $this->stubConnection();
+        $this->connection->method('fetchRow')->willReturn([]);
 
-        $this->order->setAttribute('total_orders');
+        $this->order->setAttribute('total_revenue');
+        $this->order->setOperator('<');
+        $this->order->setValue(100);
+
+        $this->assertTrue($this->order->validate(1));
+    }
+
+    public function testValidateExistencePositiveMatch(): void
+    {
+        $this->stubConnection();
+        // A matching order row exists.
+        $this->connection->method('fetchOne')->willReturn('42');
+
+        $this->order->setAttribute('payment_method');
         $this->order->setOperator('==');
-        $this->order->setValue(5);
+        $this->order->setValue('checkmo');
 
-        $result = $this->order->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->order->validate(1));
     }
 
-    public function testValidateWithTotalRevenueAttribute(): void
+    /**
+     * Negation is applied at the customer level: a customer with NO matching order
+     * satisfies "payment_method != checkmo".
+     */
+    public function testValidateExistenceNegationTrueWhenNoMatchingOrder(): void
     {
-        $this->setupDbMock(['total_revenue' => 1000.50]);
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn(false);
 
-        $this->order->setAttribute('total_revenue');
-        $this->order->setOperator('>=');
-        $this->order->setValue(500);
+        $this->order->setAttribute('payment_method');
+        $this->order->setOperator('!=');
+        $this->order->setValue('checkmo');
 
-        $result = $this->order->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->order->validate(1));
     }
 
-    public function testValidateReturnsFalseForNullValue(): void
+    /**
+     * A customer who DOES have a matching order does NOT satisfy the negation.
+     */
+    public function testValidateExistenceNegationFalseWhenMatchingOrderExists(): void
     {
-        $this->setupDbMock(['total_orders' => null]);
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('7');
 
+        $this->order->setAttribute('used_coupon');
+        $this->order->setOperator('!=');
+        $this->order->setValue('SAVE10');
+
+        $this->assertFalse($this->order->validate(1));
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForAggregateAttribute(): void
+    {
         $this->order->setAttribute('total_orders');
         $this->order->setOperator('>');
-        $this->order->setValue(0);
+        $this->order->setValue(1);
 
-        $result = $this->order->validate(1);
-        $this->assertFalse($result);
+        $this->assertNull($this->order->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForNegativeOperator(): void
+    {
+        $this->order->setAttribute('payment_method');
+        $this->order->setOperator('!=');
+        $this->order->setValue('checkmo');
+
+        $this->assertNull($this->order->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsResolvesExistenceSet(): void
+    {
+        $this->stubConnection();
+        $this->connection->method('fetchCol')->willReturn(['3', '9']);
+
+        $this->order->setAttribute('payment_method');
+        $this->order->setOperator('==');
+        $this->order->setValue('checkmo');
+
+        $this->assertSame([3, 9], $this->order->getMatchingCustomerIds());
     }
 }

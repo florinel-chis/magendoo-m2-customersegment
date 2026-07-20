@@ -2,7 +2,7 @@
     "name": "magendoo/module-customer-segment",
     "description": "Magento 2 dynamic customer segmentation module — rule-based segments with admin UI, REST API, CLI, and Cart Price Rule integration.",
     "type": "magento2-module",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "license": "MIT",
     "authors": [
         {

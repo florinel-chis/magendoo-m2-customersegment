@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Condition Combine
+ * Magendoo CustomerSegment - condition combine (aggregator)
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -21,7 +19,7 @@ use Magento\Rule\Model\Condition\Context;
  *
  * This class combines all available conditions for customer segments
  */
-class Combine extends BaseCombine
+class Combine extends BaseCombine implements SetBasedInterface
 {
     /**
      * @var ManagerInterface
@@ -183,5 +181,54 @@ class Combine extends BaseCombine
         }
 
         return $this->getAggregator() === 'all' ? $allValid : false;
+    }
+
+    /**
+     * Resolve the full matching customer set for this combine
+     *
+     * 'all' intersects the child sets; 'any' unions them. If ANY child (leaf or nested combine)
+     * cannot be resolved set-based (returns null) the whole combine returns null and the caller
+     * falls back to per-customer validate(). An empty combine returns null (membership of an empty
+     * combine is a product decision handled by the segment manager, not silently "everyone").
+     *
+     * @return int[]|null
+     */
+    public function getMatchingCustomerIds(): ?array
+    {
+        $conditions = $this->getConditions();
+        if (!$conditions) {
+            return null;
+        }
+
+        $isAll = $this->getAggregator() === 'all';
+        $childSets = [];
+
+        foreach ($conditions as $condition) {
+            if (!$condition instanceof SetBasedInterface) {
+                return null;
+            }
+
+            $childIds = $condition->getMatchingCustomerIds();
+            if ($childIds === null) {
+                return null;
+            }
+
+            $childSets[] = array_map('intval', $childIds);
+        }
+
+        if (!$childSets) {
+            return null;
+        }
+
+        if ($isAll) {
+            $result = array_shift($childSets);
+            foreach ($childSets as $set) {
+                $result = array_intersect($result, $set);
+            }
+        } else {
+            $result = array_merge(...$childSets);
+        }
+
+        return array_values(array_unique($result));
     }
 }

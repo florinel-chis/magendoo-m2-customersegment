@@ -1,23 +1,24 @@
 <?php
 /**
- * Magendoo CustomerSegment Helper
+ * Magendoo CustomerSegment - Configuration helper and enable gate
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Helper;
 
+use Magento\Cron\Model\Schedule;
+use Magento\Cron\Model\ScheduleFactory;
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Framework\App\Helper\Context;
+use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Store\Model\ScopeInterface;
 
 /**
- * Data Helper
+ * Data Helper.
  */
 class Data extends AbstractHelper
 {
@@ -27,6 +28,36 @@ class Data extends AbstractHelper
     public const XML_PATH_ENABLED = 'customersegment/general/enabled';
     public const XML_PATH_DEFAULT_REFRESH_MODE = 'customersegment/general/default_refresh_mode';
     public const XML_PATH_CRON_SCHEDULE = 'customersegment/general/cron_schedule';
+
+    /**
+     * Default cron schedule, kept in sync with config.xml.
+     */
+    public const DEFAULT_CRON_SCHEDULE = '*/5 * * * *';
+
+    /**
+     * @var ScheduleFactory
+     */
+    private ScheduleFactory $scheduleFactory;
+
+    /**
+     * @var DateTime
+     */
+    private DateTime $dateTime;
+
+    /**
+     * @param Context $context
+     * @param ScheduleFactory $scheduleFactory
+     * @param DateTime $dateTime
+     */
+    public function __construct(
+        Context $context,
+        ScheduleFactory $scheduleFactory,
+        DateTime $dateTime
+    ) {
+        $this->scheduleFactory = $scheduleFactory;
+        $this->dateTime = $dateTime;
+        parent::__construct($context);
+    }
 
     /**
      * Check if module is enabled
@@ -70,7 +101,7 @@ class Data extends AbstractHelper
             self::XML_PATH_CRON_SCHEDULE,
             ScopeInterface::SCOPE_STORE,
             $storeId
-        ) ?: '0 2 * * *';
+        ) ?: self::DEFAULT_CRON_SCHEDULE;
     }
 
     /**
@@ -87,21 +118,36 @@ class Data extends AbstractHelper
 
         $aggregator = $conditions['aggregator'] ?? 'all';
         $result = $aggregator === 'all' ? __('Match ALL of the following:') : __('Match ANY of the following:');
-        
+
         return $result->render();
     }
 
     /**
-     * Validate cron expression
+     * Validate a 5-field crontab expression.
+     *
+     * Uses Magento's own Schedule model so ranges, steps, lists and named
+     * months/days are accepted while malformed tokens are rejected.
      *
      * @param string $expression
      * @return bool
      */
     public function validateCronExpression(string $expression): bool
     {
-        // Basic validation - 5 fields separated by spaces
-        $parts = explode(' ', $expression);
-        return count($parts) === 5;
+        $parts = preg_split('#\s+#', trim($expression), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($parts) !== 5) {
+            return false;
+        }
+
+        try {
+            /** @var Schedule $schedule */
+            $schedule = $this->scheduleFactory->create();
+            $schedule->setCronExpr($expression);
+            $schedule->setScheduledAt($this->dateTime->gmtDate('Y-m-d H:i:00'));
+            $schedule->trySchedule();
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**

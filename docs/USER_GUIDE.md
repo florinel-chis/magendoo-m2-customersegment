@@ -226,7 +226,7 @@ Customers are only assigned when you click the **"Refresh"** button.
 
 ### Cron (Scheduled)
 
-Customers are automatically updated on a schedule (default: daily at 2 AM).
+Customers are automatically updated on a schedule (default: `*/5 * * * *`, every 5 minutes).
 
 **Best for**:
 - Regular customer base updates
@@ -332,9 +332,10 @@ Use segments to analyze customer behavior:
 1. Verify customer data exists
 2. Check condition logic (AND vs OR)
 3. Test conditions individually
-4. Use CLI to test:
+4. Refresh from the CLI and review the system log:
    ```bash
-   bin/magento magendoo:customer-segment:refresh <id> --debug
+   bin/magento magendoo:customer-segment:refresh <id>
+   tail -f var/log/system.log | grep -i segment
    ```
 
 ### Segment Not Appearing in Cart Price Rules
@@ -399,5 +400,5 @@ A: Export the database tables or use the API to retrieve segment definitions.
 
 ---
 
-**Last Updated**: 2026-04-01  
-**Version**: 1.0.0
+**Last Updated**: 2026-07-20  
+**Version**: 2.0.0

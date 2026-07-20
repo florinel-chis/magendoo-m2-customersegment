@@ -1,12 +1,10 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Magendoo CustomerSegment Dependency Injection configuration
+ * Magendoo CustomerSegment - Dependency Injection configuration
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -29,6 +27,22 @@
                 <item name="magendoo_customersegment_refresh"
                       xsi:type="object">Magendoo\CustomerSegment\Console\Command\SegmentRefreshCommand</item>
             </argument>
+        </arguments>
+    </type>
+
+    <!--
+        Inject the command's services as Proxies. Magento instantiates every console command up front
+        (to read its name) during CLI bootstrap. Resolving the heavy service graph at that point - in
+        particular while generated/ is being rebuilt - can momentarily yield a null dependency and a
+        constructor TypeError. Proxies defer construction of the real objects until a command actually
+        runs, so registration stays lightweight and safe.
+    -->
+    <type name="Magendoo\CustomerSegment\Console\Command\SegmentRefreshCommand">
+        <arguments>
+            <argument name="segmentManagement" xsi:type="object">Magendoo\CustomerSegment\Api\SegmentManagementInterface\Proxy</argument>
+            <argument name="segmentRepository" xsi:type="object">Magendoo\CustomerSegment\Api\SegmentRepositoryInterface\Proxy</argument>
+            <argument name="helper" xsi:type="object">Magendoo\CustomerSegment\Helper\Data\Proxy</argument>
+            <argument name="filesystem" xsi:type="object">Magento\Framework\Filesystem\Proxy</argument>
         </arguments>
     </type>
 
@@ -78,9 +92,24 @@
                 type="Magendoo\CustomerSegment\Plugin\AddSegmentConditionPlugin"/>
     </type>
 
-    <!-- Plugin: Customer grid segment column -->
-    <type name="Magento\Customer\Model\ResourceModel\Grid\Collection">
-        <plugin name="magendoo_customersegment_customer_grid"
-                type="Magendoo\CustomerSegment\Plugin\CustomerGridPlugin"/>
+    <!--
+        Exclude the indexer's own bookkeeping columns from the mview UPDATE trigger. The
+        customersegment_segment view is segment-scoped; when a refresh writes customer_count /
+        last_refreshed back onto magendoo_customer_segment the update trigger would otherwise
+        re-enqueue that segment into the changelog, creating a self-perpetuating backlog. The
+        map is keyed [viewId][tableName] => columns. (updated_at is already covered by Magento's
+        global ignoredUpdateColumns default.)
+    -->
+    <type name="Magento\Framework\Mview\View\Subscription">
+        <arguments>
+            <argument name="ignoredUpdateColumnsBySubscription" xsi:type="array">
+                <item name="customersegment_segment" xsi:type="array">
+                    <item name="magendoo_customer_segment" xsi:type="array">
+                        <item name="customer_count" xsi:type="string">customer_count</item>
+                        <item name="last_refreshed" xsi:type="string">last_refreshed</item>
+                    </item>
+                </item>
+            </argument>
+        </arguments>
     </type>
 </config>

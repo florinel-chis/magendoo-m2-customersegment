@@ -1,55 +1,57 @@
 <?php
 /**
- * Magendoo CustomerSegment Order Place After Observer
+ * Magendoo CustomerSegment - Realtime membership on order placement
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Observer;
 
+use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
+use Magendoo\CustomerSegment\Helper\Data as Helper;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
-use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
-use Magendoo\CustomerSegment\Model\ResourceModel\Segment\CollectionFactory;
 use Psr\Log\LoggerInterface;
 
 /**
- * Observer for order placement
+ * Re-evaluates realtime segment membership for the ordering customer only.
+ *
+ * A single-customer re-evaluation is used instead of a full segment rescan so
+ * that placing an order never triggers an O(customers x conditions) refresh
+ * inside the checkout request.
  */
 class OrderPlaceAfter implements ObserverInterface
 {
     /**
      * @var SegmentManagementInterface
      */
-    protected SegmentManagementInterface $segmentManagement;
+    private SegmentManagementInterface $segmentManagement;
 
     /**
-     * @var CollectionFactory
+     * @var Helper
      */
-    protected CollectionFactory $segmentCollectionFactory;
+    private Helper $helper;
 
     /**
      * @var LoggerInterface
      */
-    protected LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /**
      * @param SegmentManagementInterface $segmentManagement
-     * @param CollectionFactory $segmentCollectionFactory
+     * @param Helper $helper
      * @param LoggerInterface $logger
      */
     public function __construct(
         SegmentManagementInterface $segmentManagement,
-        CollectionFactory $segmentCollectionFactory,
+        Helper $helper,
         LoggerInterface $logger
     ) {
         $this->segmentManagement = $segmentManagement;
-        $this->segmentCollectionFactory = $segmentCollectionFactory;
+        $this->helper = $helper;
         $this->logger = $logger;
     }
 
@@ -61,26 +63,21 @@ class OrderPlaceAfter implements ObserverInterface
      */
     public function execute(Observer $observer): void
     {
+        if (!$this->helper->isEnabled()) {
+            return;
+        }
+
         /** @var \Magento\Sales\Model\Order $order */
         $order = $observer->getEvent()->getOrder();
-        
+
         $customerId = $order->getCustomerId();
-        
+
         if (!$customerId) {
             return; // Guest order
         }
 
         try {
-            // Get order-related segments (those with order conditions)
-            $segments = $this->segmentCollectionFactory->create()
-                ->addActiveFilter()
-                ->addRefreshModeFilter('realtime')
-                ->getItems();
-
-            foreach ($segments as $segment) {
-                // Refresh segment to recalculate customer count
-                $this->segmentManagement->refreshSegment((int) $segment->getId());
-            }
+            $this->segmentManagement->updateCustomerMembership((int) $customerId);
         } catch (\Exception $e) {
             $this->logger->error('OrderPlaceAfter observer error: ' . $e->getMessage());
         }

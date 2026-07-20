@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Collection
+ * Magendoo CustomerSegment - Segment collection (UTC-aware staleness filter)
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -92,13 +90,16 @@ class Collection extends AbstractCollection
     public function addNeedsRefreshFilter(): static
     {
         $this->addActiveFilter();
-        
+
         // Filter for segments that need refreshing:
         // - Cron mode: any active
         // - Realtime mode: not refreshed in last hour
+        // last_refreshed is stored in UTC (gmtDate), so compare against UTC_TIMESTAMP()
+        // rather than the session-timezone NOW() to avoid a timezone-skewed threshold.
         $this->getSelect()->where(
             '(refresh_mode = ?) OR ' .
-            '(refresh_mode = ? AND (last_refreshed IS NULL OR last_refreshed < DATE_SUB(NOW(), INTERVAL 1 HOUR)))',
+            '(refresh_mode = ? AND ' .
+            '(last_refreshed IS NULL OR last_refreshed < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)))',
             Segment::REFRESH_MODE_CRON,
             Segment::REFRESH_MODE_REALTIME
         );

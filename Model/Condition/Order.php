@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Order Condition
+ * Magendoo CustomerSegment - order history condition
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -13,6 +11,7 @@ declare(strict_types=1);
 namespace Magendoo\CustomerSegment\Model\Condition;
 
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Select;
 use Magento\Framework\DB\Sql\Expression;
 use Magento\Rule\Model\Condition\AbstractCondition;
 use Magento\Rule\Model\Condition\Context;
@@ -21,8 +20,34 @@ use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollection
 /**
  * Order History Condition
  */
-class Order extends AbstractCondition
+class Order extends AbstractCondition implements SetBasedInterface
 {
+    /**
+     * Order states excluded from every aggregate/existence query.
+     */
+    private const EXCLUDED_STATES = ['canceled', 'closed'];
+
+    /**
+     * Attributes evaluated as an existence check over individual orders (not the aggregate row).
+     */
+    private const EXISTENCE_ATTRIBUTES = [
+        'used_coupon',
+        'payment_method',
+        'shipping_method',
+        'order_status',
+        'shipping_country',
+    ];
+
+    /**
+     * Date attributes derived from the aggregate row.
+     */
+    private const DATE_ATTRIBUTES = ['first_order_date', 'last_order_date'];
+
+    /**
+     * Operators that negate at the customer level.
+     */
+    private const NEGATIVE_OPERATORS = ['!=', '!()', '!{}'];
+
     /**
      * @var OrderCollectionFactory
      */
@@ -95,7 +120,7 @@ class Order extends AbstractCondition
     public function getInputType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'first_order_date', 'last_order_date' => 'date',
             'total_orders', 'total_items' => 'numeric',
@@ -113,7 +138,7 @@ class Order extends AbstractCondition
     public function getValueElementType(): string
     {
         $attribute = $this->getAttribute();
-        
+
         return match ($attribute) {
             'first_order_date', 'last_order_date' => 'date',
             'payment_method', 'shipping_method', 'order_status' => 'select',
@@ -129,7 +154,7 @@ class Order extends AbstractCondition
     public function getDefaultOperatorOptions(): array
     {
         $type = $this->getInputType();
-        
+
         return match ($type) {
             'date' => [
                 '==' => __('is'),
@@ -170,35 +195,57 @@ class Order extends AbstractCondition
      */
     public function validate($customer): bool
     {
-        if (is_numeric($customer)) {
-            $customerId = (int) $customer;
-        } elseif ($customer instanceof \Magento\Customer\Model\Customer) {
-            $customerId = (int) $customer->getId();
-        } else {
+        $customerId = $this->resolveCustomerId($customer);
+        if ($customerId === null) {
             return false;
         }
 
-        if (!$customerId) {
-            return false;
-        }
-
-        $attribute = $this->getAttribute();
-        $operator = $this->getOperator();
+        $attribute = (string) $this->getAttribute();
+        $operator = (string) $this->getOperator();
         $value = $this->getValue();
 
-        // Aggregate order data
-        $orderData = $this->getCustomerOrderData($customerId);
-
-        // No orders found
-        if (empty($orderData) && $attribute !== 'total_orders') {
-            return false;
+        if (in_array($attribute, self::EXISTENCE_ATTRIBUTES, true)) {
+            return $this->validateExistence($customerId, $attribute, $operator, $value);
         }
 
-        return $this->validateAgainstOrderData($orderData, $attribute, $operator, $value);
+        $orderData = $this->getCustomerOrderData($customerId);
+
+        return $this->validateAggregate($orderData, $attribute, $operator, $value);
     }
 
     /**
-     * Get aggregated order data for customer
+     * Resolve matching customer ids for the set-resolvable positive existence attributes
+     *
+     * Aggregate/date attributes and every customer-level negation require the full customer
+     * universe (including zero-order customers) and are therefore not resolvable set-based here.
+     *
+     * @return int[]|null
+     */
+    public function getMatchingCustomerIds(): ?array
+    {
+        $attribute = (string) $this->getAttribute();
+        $operator = (string) $this->getOperator();
+
+        if (!in_array($attribute, self::EXISTENCE_ATTRIBUTES, true)) {
+            return null;
+        }
+
+        if (in_array($operator, self::NEGATIVE_OPERATORS, true)) {
+            return null;
+        }
+
+        $connection = $this->resourceConnection->getConnection();
+        $select = $this->buildExistenceSelect($attribute, $operator, $this->getValue())
+            ->reset(Select::COLUMNS)
+            ->distinct(true)
+            ->columns(['customer_id' => 'o.customer_id'])
+            ->where('o.customer_id IS NOT NULL');
+
+        return array_map('intval', $connection->fetchCol($select));
+    }
+
+    /**
+     * Get aggregated order data for a customer (zero-order customers yield COALESCE-ed zeros)
      *
      * @param int $customerId
      * @return array
@@ -213,21 +260,21 @@ class Order extends AbstractCondition
                 $orderTable,
                 [
                     'total_orders' => new Expression('COUNT(*)'),
-                    'total_revenue' => new Expression('SUM(base_grand_total)'),
-                    'average_order_value' => new Expression('AVG(base_grand_total)'),
-                    'total_items' => new Expression('SUM(total_qty_ordered)'),
+                    'total_revenue' => new Expression('COALESCE(SUM(base_grand_total), 0)'),
+                    'average_order_value' => new Expression('COALESCE(AVG(base_grand_total), 0)'),
+                    'total_items' => new Expression('COALESCE(SUM(total_qty_ordered), 0)'),
                     'first_order_date' => new Expression('MIN(created_at)'),
                     'last_order_date' => new Expression('MAX(created_at)'),
                 ]
             )
             ->where('customer_id = ?', $customerId)
-            ->where('state NOT IN (?)', ['canceled', 'closed']);
+            ->where('state NOT IN (?)', self::EXCLUDED_STATES);
 
         return $connection->fetchRow($select) ?: [];
     }
 
     /**
-     * Validate condition against order data
+     * Validate an aggregate (numeric/date) attribute
      *
      * @param array $orderData
      * @param string $attribute
@@ -235,107 +282,185 @@ class Order extends AbstractCondition
      * @param mixed $value
      * @return bool
      */
-    protected function validateAgainstOrderData(array $orderData, string $attribute, string $operator, mixed $value): bool
+    protected function validateAggregate(array $orderData, string $attribute, string $operator, mixed $value): bool
     {
-        // Special handling for non-aggregated fields
-        if (in_array($attribute, ['used_coupon', 'payment_method', 'shipping_method', 'order_status'])) {
-            return $this->validateOrderHistoryAttribute($orderData['customer_id'] ?? null, $attribute, $operator, $value);
+        if (in_array($attribute, self::DATE_ATTRIBUTES, true)) {
+            return $this->validateDate($orderData[$attribute] ?? null, $operator, $value);
         }
 
-        $actualValue = $orderData[$attribute] ?? null;
+        $actualValue = $orderData[$attribute] ?? 0;
 
-        if ($actualValue === null) {
+        if (!is_numeric($actualValue) || !is_numeric(is_array($value) ? '' : $value)) {
+            if ($operator === 'between') {
+                return $this->isValueBetween((float) $actualValue, $value);
+            }
             return false;
         }
 
-        // Numeric comparison
-        if (is_numeric($actualValue) && is_numeric($value)) {
-            $actualValue = (float) $actualValue;
-            $value = (float) $value;
+        $actualValue = (float) $actualValue;
+        $compare = (float) $value;
 
-            return match ($operator) {
-                '==' => $actualValue == $value,
-                '!=' => $actualValue != $value,
-                '>' => $actualValue > $value,
-                '<' => $actualValue < $value,
-                '>=' => $actualValue >= $value,
-                '<=' => $actualValue <= $value,
-                'between' => $this->isValueBetween($actualValue, $value),
-                default => false,
-            };
-        }
-
-        // Date comparison
-        if (in_array($attribute, ['first_order_date', 'last_order_date'])) {
-            $actualTime = strtotime($actualValue);
-            $compareTime = strtotime($value);
-
-            return match ($operator) {
-                '==' => date('Y-m-d', $actualTime) == date('Y-m-d', $compareTime),
-                '!=' => date('Y-m-d', $actualTime) != date('Y-m-d', $compareTime),
-                '>' => $actualTime > $compareTime,
-                '<' => $actualTime < $compareTime,
-                default => false,
-            };
-        }
-
-        return false;
+        return match ($operator) {
+            '==' => $actualValue == $compare,
+            '!=' => $actualValue != $compare,
+            '>' => $actualValue > $compare,
+            '<' => $actualValue < $compare,
+            '>=' => $actualValue >= $compare,
+            '<=' => $actualValue <= $compare,
+            'between' => $this->isValueBetween($actualValue, $value),
+            default => false,
+        };
     }
 
     /**
-     * Validate against order history (for fields not in aggregate)
+     * Validate a date attribute using UTC-aware comparison
      *
-     * @param int|null $customerId
+     * @param string|null $actual
+     * @param string $operator
+     * @param mixed $value
+     * @return bool
+     */
+    protected function validateDate(?string $actual, string $operator, mixed $value): bool
+    {
+        if ($actual === null || $actual === '') {
+            return false;
+        }
+
+        $actualTs = $this->toUtcTimestamp($actual);
+        if ($actualTs === null) {
+            return false;
+        }
+
+        if ($operator === 'between') {
+            [$from, $to] = $this->splitRange($value);
+            $fromTs = $this->toUtcTimestamp($from);
+            $toTs = $this->toUtcTimestamp($to);
+            if ($fromTs === null || $toTs === null) {
+                return false;
+            }
+            return $actualTs >= $fromTs && $actualTs <= $toTs;
+        }
+
+        $compareTs = $this->toUtcTimestamp((string) $value);
+        if ($compareTs === null) {
+            return false;
+        }
+
+        return match ($operator) {
+            '==' => gmdate('Y-m-d', $actualTs) === gmdate('Y-m-d', $compareTs),
+            '!=' => gmdate('Y-m-d', $actualTs) !== gmdate('Y-m-d', $compareTs),
+            '>' => $actualTs > $compareTs,
+            '<' => $actualTs < $compareTs,
+            default => false,
+        };
+    }
+
+    /**
+     * Validate an existence attribute, negating at the customer level for negative operators
+     *
+     * @param int $customerId
      * @param string $attribute
      * @param string $operator
      * @param mixed $value
      * @return bool
      */
-    protected function validateOrderHistoryAttribute(?int $customerId, string $attribute, string $operator, mixed $value): bool
+    protected function validateExistence(int $customerId, string $attribute, string $operator, mixed $value): bool
     {
-        if (!$customerId) {
-            return false;
-        }
+        $connection = $this->resourceConnection->getConnection();
+        $select = $this->buildExistenceSelect($attribute, $operator, $value)
+            ->reset(Select::COLUMNS)
+            ->columns(['o.entity_id'])
+            ->where('o.customer_id = ?', $customerId)
+            ->limit(1);
 
+        $exists = (bool) $connection->fetchOne($select);
+
+        return in_array($operator, self::NEGATIVE_OPERATORS, true) ? !$exists : $exists;
+    }
+
+    /**
+     * Build a select carrying the POSITIVE predicate for an existence attribute
+     *
+     * Negation is applied by the caller at the customer level, never per row.
+     *
+     * @param string $attribute
+     * @param string $operator
+     * @param mixed $value
+     * @return Select
+     */
+    private function buildExistenceSelect(string $attribute, string $operator, mixed $value): Select
+    {
         $connection = $this->resourceConnection->getConnection();
         $orderTable = $this->resourceConnection->getTableName('sales_order');
 
-        $column = match ($attribute) {
-            'used_coupon' => 'coupon_code',
-            'payment_method' => 'payment_method',
-            'shipping_method' => 'shipping_method',
-            'order_status' => 'status',
-            default => $attribute,
-        };
-
         $select = $connection->select()
-            ->from($orderTable, 'entity_id')
-            ->where('customer_id = ?', $customerId)
-            ->where('state NOT IN (?)', ['canceled', 'closed']);
+            ->from(['o' => $orderTable], ['o.entity_id'])
+            ->where('o.state NOT IN (?)', self::EXCLUDED_STATES);
 
-        // Build the condition
-        $values = is_array($value) ? $value : explode(',', $value);
-        $values = array_map('trim', $values);
+        [$column, $joinable] = $this->resolveExistenceColumn($attribute);
 
-        switch ($operator) {
-            case '==':
-                $select->where($column . ' = ?', $values[0]);
-                break;
-            case '!=':
-                $select->where($column . ' != ?', $values[0]);
-                break;
-            case '()':
-                $select->where($column . ' IN (?)', $values);
-                break;
-            case '!()':
-                $select->where($column . ' NOT IN (?)', $values);
-                break;
-            default:
-                $select->where($column . ' LIKE ?', '%' . $values[0] . '%');
+        if ($joinable === 'payment') {
+            $paymentTable = $this->resourceConnection->getTableName('sales_order_payment');
+            $select->join(['sop' => $paymentTable], 'sop.parent_id = o.entity_id', []);
+        } elseif ($joinable === 'shipping_address') {
+            $addressTable = $this->resourceConnection->getTableName('sales_order_address');
+            $select->join(
+                ['soa' => $addressTable],
+                'soa.parent_id = o.entity_id AND soa.address_type = ' . $connection->quote('shipping'),
+                []
+            );
         }
 
-        $result = $connection->fetchOne($select);
-        return (bool) $result;
+        $this->applyPositivePredicate($select, $column, $operator, $value);
+
+        return $select;
+    }
+
+    /**
+     * Map an existence attribute to its qualified column and required join
+     *
+     * @param string $attribute
+     * @return array{0: string, 1: string|null}
+     */
+    private function resolveExistenceColumn(string $attribute): array
+    {
+        return match ($attribute) {
+            'used_coupon' => ['o.coupon_code', null],
+            'order_status' => ['o.status', null],
+            'shipping_method' => ['o.shipping_method', null],
+            'payment_method' => ['sop.method', 'payment'],
+            'shipping_country' => ['soa.country_id', 'shipping_address'],
+            default => ['o.' . $attribute, null],
+        };
+    }
+
+    /**
+     * Apply the positive form of the operator predicate to the select
+     *
+     * @param Select $select
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @return void
+     */
+    private function applyPositivePredicate(Select $select, string $column, string $operator, mixed $value): void
+    {
+        $values = array_map('trim', is_array($value) ? $value : explode(',', (string) $value));
+
+        switch ($operator) {
+            case '()':
+            case '!()':
+                $select->where($column . ' IN (?)', $values);
+                break;
+            case '{}':
+            case '!{}':
+                $select->where($column . ' LIKE ?', '%' . ($values[0] ?? '') . '%');
+                break;
+            case '==':
+            case '!=':
+            default:
+                $select->where($column . ' = ?', $values[0] ?? '');
+        }
     }
 
     /**
@@ -347,15 +472,63 @@ class Order extends AbstractCondition
      */
     protected function isValueBetween(float $actualValue, mixed $rangeValue): bool
     {
-        if (is_array($rangeValue)) {
-            $min = (float) ($rangeValue[0] ?? 0);
-            $max = (float) ($rangeValue[1] ?? 0);
-        } else {
-            $values = explode(',', $rangeValue);
-            $min = (float) trim($values[0] ?? 0);
-            $max = (float) trim($values[1] ?? 0);
+        [$from, $to] = $this->splitRange($rangeValue);
+
+        return $actualValue >= (float) $from && $actualValue <= (float) $to;
+    }
+
+    /**
+     * Split a range value (array or comma separated string) into a [from, to] pair
+     *
+     * @param mixed $value
+     * @return array{0: string, 1: string}
+     */
+    private function splitRange(mixed $value): array
+    {
+        if (is_array($value)) {
+            return [(string) ($value[0] ?? ''), (string) ($value[1] ?? '')];
         }
 
-        return $actualValue >= $min && $actualValue <= $max;
+        $values = explode(',', (string) $value);
+
+        return [trim($values[0] ?? ''), trim($values[1] ?? '')];
+    }
+
+    /**
+     * Parse a stored (UTC) timestamp string into a UTC epoch
+     *
+     * @param string $value
+     * @return int|null
+     */
+    private function toUtcTimestamp(string $value): ?int
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->getTimestamp();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Resolve a customer id from a model or scalar id
+     *
+     * @param mixed $customer
+     * @return int|null
+     */
+    private function resolveCustomerId(mixed $customer): ?int
+    {
+        if (is_numeric($customer)) {
+            $customerId = (int) $customer;
+        } elseif ($customer instanceof \Magento\Customer\Model\Customer) {
+            $customerId = (int) $customer->getId();
+        } else {
+            return null;
+        }
+
+        return $customerId > 0 ? $customerId : null;
     }
 }

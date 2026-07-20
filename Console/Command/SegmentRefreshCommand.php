@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment CLI Refresh Command
+ * Magendoo CustomerSegment - CLI segment refresh and export command
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -14,7 +12,11 @@ namespace Magendoo\CustomerSegment\Console\Command;
 
 use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
+use Magendoo\CustomerSegment\Helper\Data as Helper;
+use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Console\Cli;
+use Magento\Framework\Filesystem;
+use Magento\Framework\Stdlib\DateTime\DateTime;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,6 +34,11 @@ class SegmentRefreshCommand extends Command
     public const COMMAND_NAME = 'magendoo:customer-segment:refresh';
 
     /**
+     * Supported export formats
+     */
+    private const ALLOWED_EXPORT_FORMATS = ['csv', 'xml'];
+
+    /**
      * @var SegmentManagementInterface
      */
     protected SegmentManagementInterface $segmentManagement;
@@ -42,17 +49,41 @@ class SegmentRefreshCommand extends Command
     protected SegmentRepositoryInterface $segmentRepository;
 
     /**
+     * @var Helper
+     */
+    protected Helper $helper;
+
+    /**
+     * @var Filesystem
+     */
+    protected Filesystem $filesystem;
+
+    /**
+     * @var DateTime
+     */
+    protected DateTime $dateTime;
+
+    /**
      * @param SegmentManagementInterface $segmentManagement
      * @param SegmentRepositoryInterface $segmentRepository
+     * @param Helper $helper
+     * @param Filesystem $filesystem
+     * @param DateTime $dateTime
      * @param string|null $name
      */
     public function __construct(
         SegmentManagementInterface $segmentManagement,
         SegmentRepositoryInterface $segmentRepository,
+        Helper $helper,
+        Filesystem $filesystem,
+        DateTime $dateTime,
         ?string $name = null
     ) {
         $this->segmentManagement = $segmentManagement;
         $this->segmentRepository = $segmentRepository;
+        $this->helper = $helper;
+        $this->filesystem = $filesystem;
+        $this->dateTime = $dateTime;
         parent::__construct($name);
     }
 
@@ -112,6 +143,14 @@ HELP
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
+            if (!$this->helper->isEnabled()) {
+                $output->writeln(
+                    '<error>Customer Segment module is disabled '
+                    . '(customersegment/general/enabled). Nothing to do.</error>'
+                );
+                return Cli::RETURN_FAILURE;
+            }
+
             if ($input->getOption('all')) {
                 return $this->refreshAllSegments($output);
             }
@@ -124,12 +163,15 @@ HELP
             }
 
             if ($input->getOption('export')) {
-                return $this->exportSegment($segmentIds[0], $input->getOption('format'), $output);
+                return $this->exportSegment(
+                    (int) $segmentIds[0],
+                    (string) $input->getOption('format'),
+                    $output
+                );
             }
 
             return $this->refreshSegments($segmentIds, $output);
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $output->writeln('<error>' . $e->getMessage() . '</error>');
             return Cli::RETURN_FAILURE;
         }
@@ -192,6 +234,16 @@ HELP
      */
     protected function exportSegment(int $segmentId, string $format, OutputInterface $output): int
     {
+        $format = strtolower(trim($format));
+        if (!in_array($format, self::ALLOWED_EXPORT_FORMATS, true)) {
+            $output->writeln(sprintf(
+                '<error>Invalid --format "%s". Supported formats: %s.</error>',
+                $format,
+                implode(', ', self::ALLOWED_EXPORT_FORMATS)
+            ));
+            return Cli::RETURN_FAILURE;
+        }
+
         try {
             $segment = $this->segmentRepository->getById($segmentId);
             $output->writeln(sprintf('Exporting segment: <comment>%s</comment>', $segment->getName()));
@@ -203,28 +255,25 @@ HELP
                 return Cli::RETURN_SUCCESS;
             }
 
-            // Save to file
-            $filename = sprintf('segment_%d_customers_%s.%s', 
-                $segmentId, 
-                date('Y-m-d_H-i-s'), 
+            $filename = sprintf(
+                'segment_%d_customers_%s.%s',
+                $segmentId,
+                $this->dateTime->gmtDate('Y-m-d_H-i-s'),
                 $format
             );
-            $filepath = 'var/export/' . $filename;
-            $fullPath = BP . '/' . $filepath;
+            $relativePath = 'export/' . $filename;
 
-            // Ensure directory exists
-            $dir = dirname($fullPath);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
+            $varDir = $this->filesystem->getDirectoryWrite(DirectoryList::VAR_DIR);
+            $varDir->create('export');
+            $varDir->writeFile($relativePath, $data);
 
-            file_put_contents($fullPath, $data);
-
-            $output->writeln(sprintf('<info>✓</info> Exported to: <comment>%s</comment>', $filepath));
+            $output->writeln(sprintf(
+                '<info>Exported to:</info> <comment>%s</comment>',
+                $varDir->getAbsolutePath($relativePath)
+            ));
 
             return Cli::RETURN_SUCCESS;
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $output->writeln(sprintf('<error>Export failed: %s</error>', $e->getMessage()));
             return Cli::RETURN_FAILURE;
         }

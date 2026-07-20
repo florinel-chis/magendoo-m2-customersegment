@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Indexer
+ * Magendoo CustomerSegment - Segment reindex action
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -19,6 +17,14 @@ use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Psr\Log\LoggerInterface;
 
+/**
+ * Segment-scoped indexer.
+ *
+ * Every id handled here is a SEGMENT id. The mview changelog subscribes only the
+ * magendoo_customer_segment table (see etc/mview.xml), so partial reindex ids map
+ * one-to-one to segments whose own definition changed. Customer-driven membership
+ * changes are handled separately by the realtime observers, not by this indexer.
+ */
 class Segment implements ActionInterface, MviewActionInterface
 {
     /**
@@ -78,18 +84,23 @@ class Segment implements ActionInterface, MviewActionInterface
     }
 
     /**
-     * Execute partial indexation by ID list
+     * Execute partial indexation for a list of segment IDs
      *
-     * @param array $ids
+     * @param int[]|string[] $ids Segment IDs to refresh.
      * @return void
      */
     public function executeList(array $ids): void
     {
-        $this->logger->info('Starting partial customer segment reindex for IDs: ' . implode(',', $ids));
+        $this->logger->info('Starting partial customer segment reindex for segment IDs: ' . implode(',', $ids));
 
-        foreach ($ids as $segmentId) {
+        foreach ($ids as $id) {
+            $segmentId = (int) $id;
+            if ($segmentId <= 0) {
+                continue;
+            }
+
             try {
-                $this->segmentManagement->refreshSegment((int) $segmentId);
+                $this->segmentManagement->refreshSegment($segmentId);
             } catch (\Exception $e) {
                 $this->logger->error('Error refreshing segment ' . $segmentId . ': ' . $e->getMessage());
             }
@@ -97,24 +108,29 @@ class Segment implements ActionInterface, MviewActionInterface
     }
 
     /**
-     * Execute partial indexation by ID
+     * Execute partial indexation for a single segment ID
      *
-     * @param int $id
+     * @param int $id Segment ID to refresh.
      * @return void
      */
     public function executeRow($id): void
     {
+        $segmentId = (int) $id;
+        if ($segmentId <= 0) {
+            return;
+        }
+
         try {
-            $this->segmentManagement->refreshSegment((int) $id);
+            $this->segmentManagement->refreshSegment($segmentId);
         } catch (\Exception $e) {
-            $this->logger->error('Error refreshing segment ' . $id . ': ' . $e->getMessage());
+            $this->logger->error('Error refreshing segment ' . $segmentId . ': ' . $e->getMessage());
         }
     }
 
     /**
-     * Execute materialization on changelog entities
+     * Execute materialization on changelog entities (segment IDs)
      *
-     * @param int[] $ids
+     * @param int[] $ids Segment IDs collected from the changelog.
      * @return void
      */
     public function execute($ids): void

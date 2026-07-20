@@ -1,12 +1,12 @@
 <?php
 /**
- * Magendoo CustomerSegment Matched Customers Template
+ * Magendoo CustomerSegment - matched customers template
  *
- * @var $block \Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\MatchedCustomers
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
+ * @var \Magendoo\CustomerSegment\Block\Adminhtml\Segment\Edit\MatchedCustomers $block
+ * @var \Magento\Framework\Escaper $escaper
+ *
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 ?>
 <div class="admin__data-grid-wrap">
@@ -27,6 +27,15 @@
                 <span class="admin__data-grid-header-row-info">
                     <?= $escaper->escapeHtml(__('Total Records: %1', $block->getCustomerCount())) ?>
                 </span>
+                <?php if ($block->isCapped()) : ?>
+                    <span class="admin__data-grid-header-row-info">
+                        <?= $escaper->escapeHtml(__(
+                            'Showing first %1 of %2 matched customers.',
+                            $block->getShownCount(),
+                            $block->getCustomerCount()
+                        )) ?>
+                    </span>
+                <?php endif; ?>
             </div>
             
             <table class="data-grid">

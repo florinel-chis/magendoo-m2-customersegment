@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Model
+ * Magendoo CustomerSegment - Customer segment domain model
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -20,6 +18,7 @@ use Magendoo\CustomerSegment\Api\Data\SegmentInterface;
 use Magendoo\CustomerSegment\Model\Condition\Combine;
 use Magendoo\CustomerSegment\Model\Condition\CombineFactory;
 use Magendoo\CustomerSegment\Model\ResourceModel\Segment as SegmentResource;
+use Psr\Log\LoggerInterface;
 
 /**
  * Customer Segment Model
@@ -73,11 +72,23 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
     protected \Magento\Framework\Data\FormFactory $_formFactory;
 
     /**
+     * @var CombineFactory
+     */
+    private CombineFactory $combineFactory;
+
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+
+    /**
      * @param \Magento\Framework\Model\Context $context
      * @param \Magento\Framework\Registry $registry
      * @param ExtensionAttributesFactory $extensionFactory
      * @param AttributeValueFactory $customAttributeFactory
      * @param \Magento\Framework\Data\FormFactory $formFactory
+     * @param CombineFactory $combineFactory
+     * @param LoggerInterface $logger
      * @param \Magento\Framework\Model\ResourceModel\AbstractResource|null $resource
      * @param \Magento\Framework\Data\Collection\AbstractDb|null $resourceCollection
      * @param array $data
@@ -88,12 +99,24 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
         ExtensionAttributesFactory $extensionFactory,
         AttributeValueFactory $customAttributeFactory,
         \Magento\Framework\Data\FormFactory $formFactory,
+        CombineFactory $combineFactory,
+        LoggerInterface $logger,
         ?\Magento\Framework\Model\ResourceModel\AbstractResource $resource = null,
         ?\Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null,
         array $data = []
     ) {
         $this->_formFactory = $formFactory;
-        parent::__construct($context, $registry, $extensionFactory, $customAttributeFactory, $resource, $resourceCollection, $data);
+        $this->combineFactory = $combineFactory;
+        $this->logger = $logger;
+        parent::__construct(
+            $context,
+            $registry,
+            $extensionFactory,
+            $customAttributeFactory,
+            $resource,
+            $resourceCollection,
+            $data
+        );
     }
 
     /**
@@ -315,19 +338,29 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
         }
 
         $mode = $this->getRefreshMode();
-        
+
         if ($mode === self::REFRESH_MODE_MANUAL) {
             return false;
         }
 
-        // Realtime or cron - check if data is stale (older than 1 hour)
+        // Realtime or cron - check if data is stale (older than 1 hour).
+        // Stored timestamps are UTC, so parse them in UTC and compare against a UTC "now".
         $lastRefreshed = $this->getLastRefreshed();
         if (!$lastRefreshed) {
             return true;
         }
 
-        $lastRefreshTime = strtotime($lastRefreshed);
-        $oneHourAgo = time() - 3600;
+        try {
+            $lastRefreshTime = (new \DateTime($lastRefreshed, new \DateTimeZone('UTC')))->getTimestamp();
+        } catch (\Exception $e) {
+            $this->logger->error(
+                'Unable to parse customer segment last_refreshed value: ' . $e->getMessage(),
+                ['segment_id' => $this->getId(), 'last_refreshed' => $lastRefreshed]
+            );
+            return true;
+        }
+
+        $oneHourAgo = (new \DateTime('now', new \DateTimeZone('UTC')))->getTimestamp() - 3600;
 
         return $lastRefreshTime < $oneHourAgo;
     }
@@ -345,34 +378,30 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
     public function getConditions(): Combine
     {
         if ($this->_conditions === null) {
+            $combine = $this->combineFactory->create();
+            $combine->setRule($this);
+            $combine->setPrefix('conditions');
+
             $conditionsArray = $this->getConditionsArray();
-            
-            try {
-                $this->_conditions = \Magento\Framework\App\ObjectManager::getInstance()
-                    ->get(CombineFactory::class)
-                    ->create();
-                
-                // Set this segment as the rule for the condition
-                $this->_conditions->setRule($this);
-                $this->_conditions->setPrefix('conditions');
-                
-                if ($conditionsArray) {
-                    $this->_conditions->loadArray($conditionsArray);
-                } else {
-                    // Initialize with empty conditions array for new segments
-                    $this->_conditions->setConditions([]);
+            if (is_array($conditionsArray) && !empty($conditionsArray)) {
+                try {
+                    $combine->loadArray($conditionsArray);
+                } catch (\Exception $e) {
+                    // Do not silently pretend success: log the failure and fall back to an empty combine.
+                    $this->logger->error(
+                        'Failed to load customer segment conditions: ' . $e->getMessage(),
+                        ['segment_id' => $this->getId()]
+                    );
+                    $combine->setConditions([]);
                 }
-            } catch (\Exception $e) {
-                // Fallback to empty conditions
-                $this->_conditions = \Magento\Framework\App\ObjectManager::getInstance()
-                    ->get(CombineFactory::class)
-                    ->create();
-                $this->_conditions->setRule($this);
-                $this->_conditions->setPrefix('conditions');
-                $this->_conditions->setConditions([]);
+            } else {
+                // Initialize with empty conditions array for new segments.
+                $combine->setConditions([]);
             }
+
+            $this->_conditions = $combine;
         }
-        
+
         return $this->_conditions;
     }
 
@@ -391,6 +420,10 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
         try {
             return json_decode($serialized, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
+            $this->logger->error(
+                'Failed to decode customer segment conditions JSON: ' . $e->getMessage(),
+                ['segment_id' => $this->getId()]
+            );
             return null;
         }
     }
@@ -411,6 +444,10 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
             $serialized = json_encode($conditions, JSON_THROW_ON_ERROR);
             return $this->setConditionsSerialized($serialized);
         } catch (\JsonException $e) {
+            $this->logger->error(
+                'Failed to encode customer segment conditions to JSON: ' . $e->getMessage(),
+                ['segment_id' => $this->getId()]
+            );
             return $this->setConditionsSerialized(null);
         }
     }
@@ -429,75 +466,77 @@ class Segment extends AbstractExtensibleModel implements SegmentInterface, Ident
     /**
      * Load post data into the segment
      *
+     * Distinguishes three cases for the posted `conditions` payload:
+     *  - key absent: leave the stored condition tree untouched;
+     *  - key present with a root condition: rebuild the tree via Magento's rule loader;
+     *  - key present but empty: persist an empty combine so conditions can be cleared on edit.
+     *
      * @param array $data
      * @return $this
      */
     public function loadPost(array $data): static
     {
-        if (isset($data['conditions']) && is_array($data['conditions'])) {
-            // Convert flat form data to recursive array structure
-            $conditions = $this->convertFlatToRecursive($data['conditions']);
-            if (!empty($conditions)) {
-                $this->setConditionsArray($conditions);
-            }
+        if (!array_key_exists('conditions', $data)) {
+            return $this;
         }
+
+        $flat = is_array($data['conditions']) ? $data['conditions'] : [];
+        $recursive = $this->convertFlatToRecursive($flat);
+
+        $combine = $this->combineFactory->create();
+        $combine->setRule($this);
+        $combine->setPrefix('conditions');
+
+        if ($recursive !== null) {
+            // Combine::loadArray un-flattens the nested `conditions` map into ordered children.
+            $combine->loadArray($recursive);
+        } else {
+            $combine->setAggregator('all');
+            $combine->setValue('1');
+            $combine->setConditions([]);
+        }
+
+        // asArray() emits the canonical serialized shape: an ordered `conditions` list, recursively.
+        $this->setConditionsArray($combine->asArray());
 
         return $this;
     }
 
     /**
-     * Convert flat form data to recursive array structure
+     * Convert flat admin-form condition data into the recursive array Combine::loadArray() expects
+     *
+     * Form keys use the `1`, `1--1`, `1--2--1` notation. Each path segment nests one level deeper
+     * under the literal `conditions` key, mirroring Magento's own rule flat-to-recursive conversion,
+     * so the root node returned here is `{type, aggregator, value, conditions: {1: {...}, ...}}`.
      *
      * @param array $data
-     * @return array|null
+     * @return array|null Root condition node, or null when no root (`1`) condition was posted
      */
     protected function convertFlatToRecursive(array $data): ?array
     {
-        $result = [];
-        
-        foreach ($data as $key => $value) {
-            // Skip non-array values
-            if (!is_array($value)) {
+        /** @var array<string, mixed> $arr */
+        $arr = [];
+
+        foreach ($data as $id => $values) {
+            if (!is_array($values)) {
                 continue;
             }
-            
-            // Convert key to string
-            $keyStr = (string) $key;
-            
-            // Parse the key format like "1--segment_conditions_fieldset--1"
-            $path = explode('--', $keyStr);
-            
-            if (count($path) >= 2) {
-                // Build nested structure
-                $node = &$result;
-                for ($i = 0, $l = count($path); $i < $l; $i++) {
-                    $pathKey = $path[$i];
-                    if (!isset($node[$pathKey])) {
-                        $node[$pathKey] = [];
-                    }
-                    $node = &$node[$pathKey];
+
+            $path = explode('--', (string) $id);
+            $node = &$arr;
+            for ($i = 0, $l = count($path); $i < $l; $i++) {
+                if (!isset($node['conditions'][$path[$i]])) {
+                    $node['conditions'][$path[$i]] = [];
                 }
-                // Merge the value data
-                if (is_array($value)) {
-                    foreach ($value as $vk => $vv) {
-                        $node[$vk] = $vv;
-                    }
-                }
-            } else {
-                // Simple key, store directly
-                if (!isset($result[$keyStr])) {
-                    $result[$keyStr] = [];
-                }
-                if (is_array($value)) {
-                    foreach ($value as $vk => $vv) {
-                        $result[$keyStr][$vk] = $vv;
-                    }
-                }
+                $node = &$node['conditions'][$path[$i]];
             }
+            foreach ($values as $vk => $vv) {
+                $node[$vk] = $vv;
+            }
+            unset($node);
         }
-        
-        // Return the condition at path "1" (the root condition)
-        return $result['1'] ?? null;
+
+        return $arr['conditions']['1'] ?? null;
     }
 
     /**

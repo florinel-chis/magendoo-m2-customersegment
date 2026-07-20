@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment SegmentManagement Test
+ * Magendoo CustomerSegment - SegmentManagement unit tests
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -19,15 +17,19 @@ use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Event\ManagerInterface;
 use Magento\Framework\Exception\CouldNotSaveException;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\ObjectManagerInterface;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\Stdlib\DateTime\DateTime;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Magendoo\CustomerSegment\Api\Data\SegmentInterface;
+use Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface;
 use Magendoo\CustomerSegment\Api\SegmentRepositoryInterface;
+use Magendoo\CustomerSegment\Model\Condition\Combine;
 use Magendoo\CustomerSegment\Model\Condition\CombineFactory;
 use Magendoo\CustomerSegment\Model\Condition\Customer as CustomerCondition;
 use Magendoo\CustomerSegment\Model\ResourceModel\Segment as SegmentResource;
@@ -36,42 +38,43 @@ use Magendoo\CustomerSegment\Model\SegmentManagement;
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
+#[CoversClass(SegmentManagement::class)]
 class SegmentManagementTest extends TestCase
 {
-    /** @var SegmentRepositoryInterface|MockObject */
+    /** @var SegmentRepositoryInterface&MockObject */
     private $segmentRepository;
 
-    /** @var SegmentResource|MockObject */
+    /** @var SegmentResource&MockObject */
     private $segmentResource;
 
-    /** @var CustomerCollectionFactory|MockObject */
+    /** @var CustomerCollectionFactory&MockObject */
     private $customerCollectionFactory;
 
-    /** @var ResourceConnection|MockObject */
+    /** @var ResourceConnection&MockObject */
     private $resourceConnection;
 
-    /** @var DateTime|MockObject */
+    /** @var DateTime&MockObject */
     private $dateTime;
 
-    /** @var Json|MockObject */
+    /** @var Json&MockObject */
     private $jsonSerializer;
 
-    /** @var CombineFactory|MockObject */
+    /** @var CombineFactory&MockObject */
     private $combineFactory;
 
-    /** @var SearchCriteriaBuilder|MockObject */
+    /** @var SearchCriteriaBuilder&MockObject */
     private $searchCriteriaBuilder;
 
-    /** @var FilterBuilder|MockObject */
+    /** @var FilterBuilder&MockObject */
     private $filterBuilder;
 
-    /** @var LoggerInterface|MockObject */
+    /** @var LoggerInterface&MockObject */
     private $logger;
 
-    /** @var ObjectManagerInterface|MockObject */
+    /** @var ObjectManagerInterface&MockObject */
     private $objectManager;
 
-    /** @var ManagerInterface|MockObject */
+    /** @var ManagerInterface&MockObject */
     private $eventManager;
 
     /** @var SegmentManagement */
@@ -108,32 +111,100 @@ class SegmentManagementTest extends TestCase
         );
     }
 
+    /**
+     * Build a lightweight customer row double exposing only the accessors the exporter calls.
+     *
+     * Avoids mocking Magento's Customer model (whose getEmail/getFirstname/... are magic __call
+     * methods that PHPUnit 12 can no longer stub via the removed MockBuilder::addMethods()).
+     */
+    private function makeCustomerRow(
+        mixed $id,
+        string $email,
+        string $firstname,
+        string $lastname,
+        string $createdAt
+    ): object {
+        return new class ($id, $email, $firstname, $lastname, $createdAt) {
+            public function __construct(
+                private mixed $id,
+                private string $email,
+                private string $firstname,
+                private string $lastname,
+                private string $createdAt
+            ) {
+            }
+
+            public function getId(): mixed
+            {
+                return $this->id;
+            }
+
+            public function getEmail(): string
+            {
+                return $this->email;
+            }
+
+            public function getFirstname(): string
+            {
+                return $this->firstname;
+            }
+
+            public function getLastname(): string
+            {
+                return $this->lastname;
+            }
+
+            public function getCreatedAt(): string
+            {
+                return $this->createdAt;
+            }
+        };
+    }
+
+    /**
+     * Build a customer collection double that yields the given rows on iteration.
+     *
+     * @param object[] $rows
+     * @return \Magento\Customer\Model\ResourceModel\Customer\Collection&MockObject
+     */
+    private function makeCustomerCollection(array $rows)
+    {
+        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
+        $collection->method('getIterator')->willReturn(new \ArrayIterator($rows));
+        $collection->method('addAttributeToSelect')->willReturnSelf();
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+
+        return $collection;
+    }
+
     // ==================== refreshSegment() Tests ====================
 
-    public function testRefreshSegmentWithActiveSegment(): void
+    public function testRefreshSegmentWithActiveSegmentAndNoConditions(): void
     {
         $segmentId = 1;
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
         $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getName')->willReturn('Empty Segment');
+        $segment->method('getConditionsSerialized')->willReturn(null);
 
         $this->segmentRepository->expects($this->once())
             ->method('getById')
             ->with($segmentId)
             ->willReturn($segment);
 
+        // No conditions -> empty matching set -> atomic replace with an empty list.
         $this->segmentResource->expects($this->once())
-            ->method('removeAllCustomers')
-            ->with($segmentId);
-
-        $segment->method('getConditionsSerialized')->willReturn(null);
+            ->method('replaceCustomers')
+            ->with($segmentId, [])
+            ->willReturn(0);
 
         $this->segmentResource->expects($this->once())
             ->method('updateCustomerCount')
             ->with($segmentId, 0);
 
         $result = $this->segmentManagement->refreshSegment($segmentId);
-        $this->assertEquals(0, $result);
+        $this->assertSame(0, $result);
     }
 
     public function testRefreshSegmentReturnsZeroForInactiveSegment(): void
@@ -147,11 +218,11 @@ class SegmentManagementTest extends TestCase
             ->with($segmentId)
             ->willReturn($segment);
 
-        $this->segmentResource->expects($this->never())
-            ->method('removeAllCustomers');
+        $this->segmentResource->expects($this->never())->method('replaceCustomers');
+        $this->segmentResource->expects($this->never())->method('updateCustomerCount');
 
         $result = $this->segmentManagement->refreshSegment($segmentId);
-        $this->assertEquals(0, $result);
+        $this->assertSame(0, $result);
     }
 
     public function testRefreshSegmentThrowsNoSuchEntityForInvalidId(): void
@@ -167,42 +238,47 @@ class SegmentManagementTest extends TestCase
         $this->segmentManagement->refreshSegment($segmentId);
     }
 
-    public function testRefreshSegmentClearsExistingCustomersBeforeReassigning(): void
+    public function testRefreshSegmentReplacesMembershipAtomically(): void
     {
         $segmentId = 1;
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
         $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getName')->willReturn('Segment');
+        $segment->method('getConditionsSerialized')->willReturn(null);
 
         $this->segmentRepository->method('getById')->willReturn($segment);
 
+        // The whole remove-all + reassign happens in a single replaceCustomers call (one transaction).
         $this->segmentResource->expects($this->once())
-            ->method('removeAllCustomers')
-            ->with($segmentId);
-
-        $segment->method('getConditionsSerialized')->willReturn(null);
+            ->method('replaceCustomers')
+            ->with($segmentId, [])
+            ->willReturn(0);
         $this->segmentResource->method('updateCustomerCount');
 
         $this->segmentManagement->refreshSegment($segmentId);
     }
 
-    public function testRefreshSegmentUpdatesCustomerCount(): void
+    public function testRefreshSegmentUpdatesCustomerCountFromAssignedTotal(): void
     {
         $segmentId = 1;
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
         $segment->method('getSegmentId')->willReturn($segmentId);
+        $segment->method('getName')->willReturn('Segment');
+        $segment->method('getConditionsSerialized')->willReturn(null);
 
         $this->segmentRepository->method('getById')->willReturn($segment);
-        $this->segmentResource->method('removeAllCustomers');
 
-        $segment->method('getConditionsSerialized')->willReturn(null);
+        // replaceCustomers reports the true post-assignment membership count.
+        $this->segmentResource->method('replaceCustomers')->willReturn(7);
 
         $this->segmentResource->expects($this->once())
             ->method('updateCustomerCount')
-            ->with($segmentId, 0);
+            ->with($segmentId, 7);
 
-        $this->segmentManagement->refreshSegment($segmentId);
+        $result = $this->segmentManagement->refreshSegment($segmentId);
+        $this->assertSame(7, $result);
     }
 
     // ==================== Security: Condition Type Allowlist Tests ====================
@@ -213,8 +289,7 @@ class SegmentManagementTest extends TestCase
         $method = $reflection->getMethod('createCondition');
         $method->setAccessible(true);
 
-        $this->logger->expects($this->once())
-            ->method('error');
+        $this->logger->expects($this->once())->method('error');
 
         $result = $method->invoke($this->segmentManagement, 'Malicious\Class\Name', []);
         $this->assertNull($result);
@@ -234,7 +309,7 @@ class SegmentManagementTest extends TestCase
             });
 
         $method->invoke($this->segmentManagement, 'Malicious\Class\Name', []);
-        
+
         $this->assertStringContainsString('Security:', $capturedMessage);
         $this->assertStringContainsString('Malicious', $capturedMessage);
     }
@@ -245,11 +320,9 @@ class SegmentManagementTest extends TestCase
         $method = $reflection->getMethod('createCondition');
         $method->setAccessible(true);
 
-        // Verify that allowed types don't trigger security error
-        $this->logger->expects($this->never())
-            ->method('error');
+        // Allowed types must NOT trigger the security error path.
+        $this->logger->expects($this->never())->method('error');
 
-        // Mock the ObjectManager to avoid actual instantiation
         $conditionMock = $this->createMock(\Magento\Rule\Model\Condition\AbstractCondition::class);
         $this->objectManager->expects($this->once())
             ->method('create')
@@ -272,15 +345,14 @@ class SegmentManagementTest extends TestCase
             ->willReturn($expectedIds);
 
         $result = $this->segmentManagement->getCustomerSegmentIds($customerId);
-        $this->assertEquals($expectedIds, $result);
+        $this->assertSame($expectedIds, $result);
     }
 
     public function testGetCustomerSegmentsReturnsFormattedData(): void
     {
         $customerId = 1;
-        $segmentIds = [1, 2];
 
-        $this->segmentResource->method('getCustomerSegmentIds')->willReturn($segmentIds);
+        $this->segmentResource->method('getCustomerSegmentIds')->willReturn([1, 2]);
 
         $segment1 = $this->createMock(SegmentInterface::class);
         $segment1->method('getSegmentId')->willReturn(1);
@@ -307,21 +379,16 @@ class SegmentManagementTest extends TestCase
 
     public function testGetCustomerSegmentsReturnsEmptyArrayWhenNoSegments(): void
     {
-        $customerId = 1;
-
         $this->segmentResource->method('getCustomerSegmentIds')->willReturn([]);
 
-        $result = $this->segmentManagement->getCustomerSegments($customerId);
+        $result = $this->segmentManagement->getCustomerSegments(1);
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
 
     public function testGetCustomerSegmentsSkipsDeletedSegments(): void
     {
-        $customerId = 1;
-        $segmentIds = [1, 999];
-
-        $this->segmentResource->method('getCustomerSegmentIds')->willReturn($segmentIds);
+        $this->segmentResource->method('getCustomerSegmentIds')->willReturn([1, 999]);
 
         $segment1 = $this->createMock(SegmentInterface::class);
         $segment1->method('getSegmentId')->willReturn(1);
@@ -336,7 +403,7 @@ class SegmentManagementTest extends TestCase
                 return $segment1;
             });
 
-        $result = $this->segmentManagement->getCustomerSegments($customerId);
+        $result = $this->segmentManagement->getCustomerSegments(1);
 
         $this->assertCount(1, $result);
         $this->assertEquals(1, $result[0]['id']);
@@ -344,185 +411,157 @@ class SegmentManagementTest extends TestCase
 
     public function testIsCustomerInSegmentReturnsTrueWhenPresent(): void
     {
-        $customerId = 1;
-        $segmentId = 2;
-
         $this->segmentResource->method('getCustomerSegmentIds')
-            ->with($customerId)
+            ->with(1)
             ->willReturn([1, 2, 3]);
 
-        $result = $this->segmentManagement->isCustomerInSegment($customerId, $segmentId);
-        $this->assertTrue($result);
+        $this->assertTrue($this->segmentManagement->isCustomerInSegment(1, 2));
     }
 
     public function testIsCustomerInSegmentReturnsFalseWhenAbsent(): void
     {
-        $customerId = 1;
-        $segmentId = 5;
-
         $this->segmentResource->method('getCustomerSegmentIds')
-            ->with($customerId)
+            ->with(1)
             ->willReturn([1, 2, 3]);
 
-        $result = $this->segmentManagement->isCustomerInSegment($customerId, $segmentId);
-        $this->assertFalse($result);
+        $this->assertFalse($this->segmentManagement->isCustomerInSegment(1, 5));
     }
 
     // ==================== Assign / Remove Tests ====================
 
     public function testAssignCustomerToSegmentDelegatesToResource(): void
     {
-        $customerId = 1;
-        $segmentId = 2;
-
         $this->segmentResource->expects($this->once())
             ->method('assignCustomer')
-            ->with($segmentId, $customerId)
+            ->with(2, 1)
             ->willReturn(true);
 
-        $result = $this->segmentManagement->assignCustomerToSegment($customerId, $segmentId);
-        $this->assertTrue($result);
+        $this->assertTrue($this->segmentManagement->assignCustomerToSegment(1, 2));
     }
 
     public function testAssignCustomerToSegmentThrowsCouldNotSaveOnFailure(): void
     {
-        $customerId = 1;
-        $segmentId = 2;
-
         $this->segmentResource->method('assignCustomer')
-            ->willThrowException(new \Magento\Framework\Exception\LocalizedException(__('DB error')));
+            ->willThrowException(new LocalizedException(__('DB error')));
 
         $this->expectException(CouldNotSaveException::class);
-        $this->segmentManagement->assignCustomerToSegment($customerId, $segmentId);
+        $this->segmentManagement->assignCustomerToSegment(1, 2);
     }
 
     public function testRemoveCustomerFromSegmentDelegatesToResource(): void
     {
-        $customerId = 1;
-        $segmentId = 2;
-
         $this->segmentResource->expects($this->once())
             ->method('removeCustomer')
-            ->with($segmentId, $customerId)
+            ->with(2, 1)
             ->willReturn(true);
 
-        $result = $this->segmentManagement->removeCustomerFromSegment($customerId, $segmentId);
-        $this->assertTrue($result);
+        $this->assertTrue($this->segmentManagement->removeCustomerFromSegment(1, 2));
     }
 
     public function testRemoveCustomerFromSegmentReturnsFalseOnFailure(): void
     {
-        $customerId = 1;
-        $segmentId = 2;
+        $this->segmentResource->method('removeCustomer')->willReturn(false);
 
-        $this->segmentResource->method('removeCustomer')
-            ->willReturn(false);
-
-        $result = $this->segmentManagement->removeCustomerFromSegment($customerId, $segmentId);
-        $this->assertFalse($result);
+        $this->assertFalse($this->segmentManagement->removeCustomerFromSegment(1, 2));
     }
 
     // ==================== doesCustomerMatchSegment() Tests ====================
 
     public function testDoesCustomerMatchSegmentReturnsFalseForNonExistentSegment(): void
     {
-        $customerId = 1;
-        $segmentId = 999;
-
         $this->segmentRepository->method('getById')
             ->willThrowException(new NoSuchEntityException(__('Segment not found')));
 
-        $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
-        $this->assertFalse($result);
+        $this->assertFalse($this->segmentManagement->doesCustomerMatchSegment(1, 999));
     }
 
     public function testDoesCustomerMatchSegmentReturnsFalseForInactiveSegment(): void
     {
-        $customerId = 1;
-        $segmentId = 1;
-
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(false);
 
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
-        $this->assertFalse($result);
+        $this->assertFalse($this->segmentManagement->doesCustomerMatchSegment(1, 1));
     }
 
     public function testDoesCustomerMatchSegmentReturnsFalseWhenNoConditions(): void
     {
-        $customerId = 1;
-        $segmentId = 1;
-
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
         $segment->method('getConditionsSerialized')->willReturn(null);
 
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
-        $this->assertFalse($result);
+        $this->assertFalse($this->segmentManagement->doesCustomerMatchSegment(1, 1));
     }
 
     public function testDoesCustomerMatchSegmentReturnsTrueWhenConditionsValidate(): void
     {
         $customerId = 1;
-        $segmentId = 1;
+
+        $serialized = '{"aggregator":"all","value":true,"conditions":['
+            . '{"type":"Magendoo\\\\CustomerSegment\\\\Model\\\\Condition\\\\Combine",'
+            . '"aggregator":"all","value":true}]}';
 
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
-        $segment->method('getConditionsSerialized')->willReturn('{"aggregator":"all","value":true}');
+        $segment->method('getConditionsSerialized')->willReturn($serialized);
 
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        // Mock jsonSerializer to return proper condition array
         $this->jsonSerializer->method('unserialize')
-            ->with('{"aggregator":"all","value":true}')
-            ->willReturn(['aggregator' => 'all', 'value' => true]);
+            ->with($serialized)
+            ->willReturn([
+                'aggregator' => 'all',
+                'value' => true,
+                'conditions' => [
+                    ['type' => Combine::class, 'aggregator' => 'all', 'value' => true],
+                ],
+            ]);
 
-        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
-        $combine->method('validate')->willReturn(true);
+        $combine = $this->createMock(Combine::class);
+        $combine->method('validate')->with($customerId)->willReturn(true);
 
         $this->combineFactory->method('create')->willReturn($combine);
 
-        $result = $this->segmentManagement->doesCustomerMatchSegment($customerId, $segmentId);
-        $this->assertTrue($result);
+        $this->assertTrue($this->segmentManagement->doesCustomerMatchSegment($customerId, 1));
     }
+
+    public function testDoesCustomerMatchSegmentReturnsFalseForEmptyConditionTree(): void
+    {
+        $serialized = '{"aggregator":"all","value":true,"conditions":[]}';
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $segment->method('getIsActive')->willReturn(true);
+        $segment->method('getConditionsSerialized')->willReturn($serialized);
+
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->jsonSerializer->method('unserialize')
+            ->with($serialized)
+            ->willReturn(['aggregator' => 'all', 'value' => true, 'conditions' => []]);
+
+        // An explicitly-empty condition tree matches nobody (never the entire customer base).
+        $this->assertFalse($this->segmentManagement->doesCustomerMatchSegment(1, 1));
+    }
+
+    // ==================== export Tests ====================
 
     public function testExportSegmentCustomersAsCsvReturnsCsvContent(): void
     {
         $segmentId = 1;
 
         $segment = $this->createMock(SegmentInterface::class);
-        $segment->method('getSegmentId')->willReturn($segmentId);
-        $segment->method('getIsActive')->willReturn(true);
-
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        // Mock segmentResource to return customer IDs
         $this->segmentResource->method('getSegmentCustomers')->willReturn([
-            ['customer_id' => 1]
+            ['customer_id' => 1],
         ]);
 
-        // Use getMockBuilder with onlyMethods/addMethods for Customer
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-        $customer->method('getEmail')->willReturn('test@example.com');
-        $customer->method('getFirstname')->willReturn('John');
-        $customer->method('getLastname')->willReturn('Doe');
-        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('count')->willReturn(1);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
+        $collection = $this->makeCustomerCollection([
+            $this->makeCustomerRow(1, 'test@example.com', 'John', 'Doe', '2023-01-15 10:00:00'),
+        ]);
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
         $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
@@ -537,32 +576,15 @@ class SegmentManagementTest extends TestCase
         $segmentId = 1;
 
         $segment = $this->createMock(SegmentInterface::class);
-        $segment->method('getSegmentId')->willReturn($segmentId);
-        $segment->method('getIsActive')->willReturn(true);
-
         $this->segmentRepository->method('getById')->willReturn($segment);
 
         $this->segmentResource->method('getSegmentCustomers')->willReturn([
-            ['customer_id' => 1]
+            ['customer_id' => 1],
         ]);
 
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
-            ->getMock();
-        $customer->method('getId')->willReturn('1'); // String for XML
-        $customer->method('getEmail')->willReturn('test@example.com');
-        $customer->method('getFirstname')->willReturn('John');
-        $customer->method('getLastname')->willReturn('Doe');
-        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('count')->willReturn(1);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
+        $collection = $this->makeCustomerCollection([
+            $this->makeCustomerRow('1', 'test@example.com', 'John', 'Doe', '2023-01-15 10:00:00'),
+        ]);
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
         $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'xml');
@@ -572,55 +594,34 @@ class SegmentManagementTest extends TestCase
         $this->assertStringContainsString('test@example.com', $result);
     }
 
-    public function testExportSegmentCustomersDefaultsToXmlForUnknownFormat(): void
+    public function testExportSegmentCustomersRejectsUnknownFormat(): void
     {
-        $segmentId = 1;
+        // Unknown format is now validated up-front and rejected (no silent XML fallback).
+        // Validation happens before the segment is loaded.
+        $this->segmentRepository->expects($this->never())->method('getById');
 
-        $segment = $this->createMock(SegmentInterface::class);
-        $segment->method('getSegmentId')->willReturn($segmentId);
-        $segment->method('getIsActive')->willReturn(true);
+        $this->expectException(LocalizedException::class);
+        $this->expectExceptionMessage('Unsupported export format "json"');
 
-        $this->segmentRepository->method('getById')->willReturn($segment);
-
-        $this->segmentResource->method('getSegmentCustomers')->willReturn([
-            ['customer_id' => 1]
-        ]);
-
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
-            ->getMock();
-        $customer->method('getId')->willReturn('1'); // String for XML
-        $customer->method('getEmail')->willReturn('test@example.com');
-        $customer->method('getFirstname')->willReturn('John');
-        $customer->method('getLastname')->willReturn('Doe');
-        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('count')->willReturn(1);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
-        $this->customerCollectionFactory->method('create')->willReturn($collection);
-
-        // Unknown format defaults to XML
-        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'unknown');
-
-        $this->assertStringContainsString('<?xml version="1.0"?>', $result);
+        $this->segmentManagement->exportSegmentCustomers(1, 'json');
     }
 
     public function testExportSegmentCustomersThrowsNoSuchEntityForInvalidSegment(): void
     {
-        $segmentId = 999;
-
         $this->segmentRepository->method('getById')
             ->willThrowException(new NoSuchEntityException(__('Segment not found')));
 
         $this->expectException(NoSuchEntityException::class);
+        $this->segmentManagement->exportSegmentCustomers(999, 'csv');
+    }
 
-        $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
+    public function testExportSegmentCustomersReturnsEmptyStringWhenNoCustomers(): void
+    {
+        $segment = $this->createMock(SegmentInterface::class);
+        $this->segmentRepository->method('getById')->willReturn($segment);
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([]);
+
+        $this->assertSame('', $this->segmentManagement->exportSegmentCustomers(1, 'csv'));
     }
 
     public function testExportCsvEscapesSpecialCharacters(): void
@@ -628,98 +629,75 @@ class SegmentManagementTest extends TestCase
         $segmentId = 1;
 
         $segment = $this->createMock(SegmentInterface::class);
-        $segment->method('getSegmentId')->willReturn($segmentId);
-        $segment->method('getIsActive')->willReturn(true);
-
         $this->segmentRepository->method('getById')->willReturn($segment);
 
         $this->segmentResource->method('getSegmentCustomers')->willReturn([
-            ['customer_id' => 1]
+            ['customer_id' => 1],
         ]);
 
-        // Customer with potentially dangerous CSV content
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->addMethods(['getEmail', 'getFirstname', 'getLastname', 'getCreatedAt'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-        $customer->method('getEmail')->willReturn('test@example.com');
-        $customer->method('getFirstname')->willReturn('John"Smith'); // Quote in name
-        $customer->method('getLastname')->willReturn('Doe, Jr.'); // Comma in name
-        $customer->method('getCreatedAt')->willReturn('2023-01-15 10:00:00');
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('count')->willReturn(1);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
+        $collection = $this->makeCustomerCollection([
+            // Quote in firstname, comma in lastname.
+            $this->makeCustomerRow(1, 'test@example.com', 'John"Smith', 'Doe, Jr.', '2023-01-15 10:00:00'),
+        ]);
         $this->customerCollectionFactory->method('create')->willReturn($collection);
 
         $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
 
-        // Verify the CSV properly escapes special characters (quotes doubled, commas handled)
-        $this->assertStringContainsString('"Doe, Jr."', $result); // Field with comma is quoted
-        $this->assertStringContainsString('John""Smith', $result); // Quotes are escaped as doubled quotes
+        // Field containing a comma is wrapped in quotes; embedded quotes are doubled.
+        $this->assertStringContainsString('"Doe, Jr."', $result);
+        $this->assertStringContainsString('John""Smith', $result);
     }
+
+    public function testExportCsvNeutralizesFormulaInjection(): void
+    {
+        $segmentId = 1;
+
+        $segment = $this->createMock(SegmentInterface::class);
+        $this->segmentRepository->method('getById')->willReturn($segment);
+
+        $this->segmentResource->method('getSegmentCustomers')->willReturn([
+            ['customer_id' => 1],
+        ]);
+
+        $collection = $this->makeCustomerCollection([
+            // A leading '=' would be evaluated as a formula by spreadsheet software.
+            $this->makeCustomerRow(1, '=cmd|calc', 'Jane', 'Roe', '2023-01-15 10:00:00'),
+        ]);
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        $result = $this->segmentManagement->exportSegmentCustomers($segmentId, 'csv');
+
+        // The dangerous field is prefixed with a single quote so it is treated as literal text.
+        $this->assertStringContainsString("'=cmd", $result);
+    }
+
+    // ==================== refreshAllSegments() / massRefresh() Tests ====================
 
     public function testRefreshAllSegmentsCallsRefreshForEachActiveSegment(): void
     {
-        // Segment list items (only provide IDs)
-        $segmentListItem1 = $this->createMock(SegmentInterface::class);
-        $segmentListItem1->method('getSegmentId')->willReturn(1);
-
-        $segmentListItem2 = $this->createMock(SegmentInterface::class);
-        $segmentListItem2->method('getSegmentId')->willReturn(2);
+        $listItem1 = $this->createMock(SegmentInterface::class);
+        $listItem1->method('getSegmentId')->willReturn(1);
+        $listItem2 = $this->createMock(SegmentInterface::class);
+        $listItem2->method('getSegmentId')->willReturn(2);
 
         $searchCriteria = $this->createMock(SearchCriteriaInterface::class);
         $this->searchCriteriaBuilder->method('addFilter')->willReturnSelf();
         $this->searchCriteriaBuilder->method('create')->willReturn($searchCriteria);
 
-        $segmentSearchResults = $this->createMock(\Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface::class);
-        $segmentSearchResults->method('getItems')->willReturn([$segmentListItem1, $segmentListItem2]);
+        $searchResults = $this->createMock(SegmentSearchResultsInterface::class);
+        $searchResults->method('getItems')->willReturn([$listItem1, $listItem2]);
+        $this->segmentRepository->method('getList')->willReturn($searchResults);
 
-        $this->segmentRepository->method('getList')->willReturn($segmentSearchResults);
-
-        // Full segment returned by getById in refreshSegment
+        // Each refreshSegment reloads the full segment via getById.
         $fullSegment = $this->createMock(SegmentInterface::class);
         $fullSegment->method('getIsActive')->willReturn(true);
-        $fullSegment->method('getConditionsSerialized')->willReturn('{"type":"Combine","aggregator":"all","value":true}');
-
+        $fullSegment->method('getName')->willReturn('Segment');
+        $fullSegment->method('getConditionsSerialized')->willReturn(null);
         $this->segmentRepository->method('getById')->willReturn($fullSegment);
 
-        // Mock JSON serializer for conditions
-        $this->jsonSerializer->method('unserialize')
-            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
-
-        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
-        $combine->method('validate')->willReturn(true);
-        $this->combineFactory->method('create')->willReturn($combine);
-
-        // Mock customer collection with 2 customers
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer, $customer]));
-        $collection->method('getLastPageNumber')->willReturn(1);
-        $collection->method('setPageSize')->willReturnSelf();
-        $collection->method('setCurPage')->willReturnSelf();
-        $collection->method('clear')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
-        $this->customerCollectionFactory->method('create')->willReturn($collection);
-
-        // Each segment goes through: removeAllCustomers -> massAssignCustomers -> updateCustomerCount
         $this->segmentResource->expects($this->exactly(2))
-            ->method('removeAllCustomers');
-        $this->segmentResource->expects($this->exactly(2))
-            ->method('massAssignCustomers')
-            ->willReturn(2);
+            ->method('replaceCustomers')
+            ->willReturn(3);
         $this->segmentResource->expects($this->exactly(2))
             ->method('updateCustomerCount');
 
@@ -728,145 +706,65 @@ class SegmentManagementTest extends TestCase
 
     public function testRefreshAllSegmentsLogsErrorOnException(): void
     {
-        // Segment list item (only provides ID)
-        $segmentListItem = $this->createMock(SegmentInterface::class);
-        $segmentListItem->method('getSegmentId')->willReturn(1);
+        $listItem = $this->createMock(SegmentInterface::class);
+        $listItem->method('getSegmentId')->willReturn(1);
 
         $searchCriteria = $this->createMock(SearchCriteriaInterface::class);
         $this->searchCriteriaBuilder->method('addFilter')->willReturnSelf();
         $this->searchCriteriaBuilder->method('create')->willReturn($searchCriteria);
 
-        $segmentSearchResults = $this->createMock(\Magendoo\CustomerSegment\Api\Data\SegmentSearchResultsInterface::class);
-        $segmentSearchResults->method('getItems')->willReturn([$segmentListItem]);
+        $searchResults = $this->createMock(SegmentSearchResultsInterface::class);
+        $searchResults->method('getItems')->willReturn([$listItem]);
+        $this->segmentRepository->method('getList')->willReturn($searchResults);
 
-        $this->segmentRepository->method('getList')->willReturn($segmentSearchResults);
-
-        // Full segment returned by getById
         $fullSegment = $this->createMock(SegmentInterface::class);
         $fullSegment->method('getIsActive')->willReturn(true);
-        $fullSegment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
-
+        $fullSegment->method('getName')->willReturn('Segment');
+        $fullSegment->method('getConditionsSerialized')->willReturn(null);
         $this->segmentRepository->method('getById')->willReturn($fullSegment);
 
-        $this->jsonSerializer->method('unserialize')
-            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
-
-        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
-        $combine->method('validate')->willReturn(true); // Customer matches
-        $this->combineFactory->method('create')->willReturn($combine);
-
-        // Mock customer collection with 1 customer (so massAssignCustomers gets called)
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getLastPageNumber')->willReturn(1);
-        $collection->method('setPageSize')->willReturnSelf();
-        $collection->method('setCurPage')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('clear')->willReturnSelf();
-
-        $this->customerCollectionFactory->method('create')->willReturn($collection);
-
-        // Simulate exception during massAssignCustomers
-        $this->segmentResource->method('massAssignCustomers')
+        // The atomic replace fails -> the error is logged, not re-thrown.
+        $this->segmentResource->method('replaceCustomers')
             ->willThrowException(new \Exception('DB Error'));
 
-        // Error should be logged but not thrown (just check it was called, not the exact message)
-        $this->logger->expects($this->once())
-            ->method('error');
+        $this->logger->expects($this->once())->method('error');
 
         $this->segmentManagement->refreshAllSegments();
     }
 
-    public function testMassRefreshCallsRefreshForEachSegment(): void
+    public function testMassRefreshSumsCountsForEachSegment(): void
     {
         $segmentIds = [1, 2, 3];
 
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
-        $segment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
-
+        $segment->method('getName')->willReturn('Segment');
+        $segment->method('getConditionsSerialized')->willReturn(null);
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        $this->jsonSerializer->method('unserialize')
-            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
-
-        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
-        $combine->method('validate')->willReturn(true);
-        $this->combineFactory->method('create')->willReturn($combine);
-
-        // Mock customer collection
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('getLastPageNumber')->willReturn(1);
-        $collection->method('setPageSize')->willReturnSelf();
-        $collection->method('setCurPage')->willReturnSelf();
-        $collection->method('clear')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
-        $this->customerCollectionFactory->method('create')->willReturn($collection);
-
-        // Each segment: removeAllCustomers -> massAssignCustomers (returns 1) -> updateCustomerCount
         $this->segmentResource->expects($this->exactly(3))
-            ->method('removeAllCustomers');
-        $this->segmentResource->expects($this->exactly(3))
-            ->method('massAssignCustomers')
+            ->method('replaceCustomers')
             ->willReturn(1);
         $this->segmentResource->expects($this->exactly(3))
             ->method('updateCustomerCount');
 
         $result = $this->segmentManagement->massRefresh($segmentIds);
-        $this->assertEquals(3, $result); // 3 segments * 1 customer
+        $this->assertSame(3, $result);
     }
 
-    public function testMassRefreshLogsErrorOnException(): void
+    public function testMassRefreshLogsErrorAndContinuesOnException(): void
     {
         $segmentIds = [1, 2];
 
         $segment = $this->createMock(SegmentInterface::class);
         $segment->method('getIsActive')->willReturn(true);
-        $segment->method('getConditionsSerialized')->willReturn('{"type":"Combine"}');
-
+        $segment->method('getName')->willReturn('Segment');
+        $segment->method('getConditionsSerialized')->willReturn(null);
         $this->segmentRepository->method('getById')->willReturn($segment);
 
-        $this->jsonSerializer->method('unserialize')
-            ->willReturn(['type' => 'Combine', 'aggregator' => 'all', 'value' => true]);
-
-        $combine = $this->createMock(\Magendoo\CustomerSegment\Model\Condition\Combine::class);
-        $combine->method('validate')->willReturn(true);
-        $this->combineFactory->method('create')->willReturn($combine);
-
-        // Mock customer collection
-        $customer = $this->getMockBuilder(\Magento\Customer\Model\Customer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getId'])
-            ->getMock();
-        $customer->method('getId')->willReturn(1);
-
-        $collection = $this->createMock(\Magento\Customer\Model\ResourceModel\Customer\Collection::class);
-        $collection->method('getIterator')->willReturn(new \ArrayIterator([$customer]));
-        $collection->method('getLastPageNumber')->willReturn(1);
-        $collection->method('setPageSize')->willReturnSelf();
-        $collection->method('setCurPage')->willReturnSelf();
-        $collection->method('clear')->willReturnSelf();
-        $collection->method('addAttributeToFilter')->willReturnSelf();
-
-        $this->customerCollectionFactory->method('create')->willReturn($collection);
-
-        // First segment succeeds, second throws during massAssignCustomers
+        // First segment succeeds (count 1), second throws during the atomic replace.
         $callCount = 0;
-        $this->segmentResource->method('massAssignCustomers')
+        $this->segmentResource->method('replaceCustomers')
             ->willReturnCallback(function () use (&$callCount) {
                 $callCount++;
                 if ($callCount === 2) {
@@ -875,11 +773,9 @@ class SegmentManagementTest extends TestCase
                 return 1;
             });
 
-        // Error should be logged - note the message format from production code
-        $this->logger->expects($this->once())
-            ->method('error');
+        $this->logger->expects($this->once())->method('error');
 
         $result = $this->segmentManagement->massRefresh($segmentIds);
-        $this->assertEquals(1, $result); // Only first segment's count
+        $this->assertSame(1, $result);
     }
 }

@@ -1,55 +1,53 @@
 <?php
 /**
- * Magendoo CustomerSegment Customer Save Observer
+ * Magendoo CustomerSegment - Realtime membership on customer save
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Observer;
 
+use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
+use Magendoo\CustomerSegment\Helper\Data as Helper;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
-use Magendoo\CustomerSegment\Api\SegmentManagementInterface;
-use Magendoo\CustomerSegment\Model\ResourceModel\Segment\CollectionFactory;
 use Psr\Log\LoggerInterface;
 
 /**
- * Observer for customer save
+ * Re-evaluates realtime segment membership when a customer is saved.
  */
 class CustomerSave implements ObserverInterface
 {
     /**
      * @var SegmentManagementInterface
      */
-    protected SegmentManagementInterface $segmentManagement;
+    private SegmentManagementInterface $segmentManagement;
 
     /**
-     * @var CollectionFactory
+     * @var Helper
      */
-    protected CollectionFactory $segmentCollectionFactory;
+    private Helper $helper;
 
     /**
      * @var LoggerInterface
      */
-    protected LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /**
      * @param SegmentManagementInterface $segmentManagement
-     * @param CollectionFactory $segmentCollectionFactory
+     * @param Helper $helper
      * @param LoggerInterface $logger
      */
     public function __construct(
         SegmentManagementInterface $segmentManagement,
-        CollectionFactory $segmentCollectionFactory,
+        Helper $helper,
         LoggerInterface $logger
     ) {
         $this->segmentManagement = $segmentManagement;
-        $this->segmentCollectionFactory = $segmentCollectionFactory;
+        $this->helper = $helper;
         $this->logger = $logger;
     }
 
@@ -61,44 +59,18 @@ class CustomerSave implements ObserverInterface
      */
     public function execute(Observer $observer): void
     {
-        /** @var \Magento\Customer\Model\Customer $customer */
+        if (!$this->helper->isEnabled()) {
+            return;
+        }
+
         $customer = $observer->getEvent()->getCustomer();
-        
+
         if (!$customer || !$customer->getId()) {
             return;
         }
 
         try {
-            // For realtime segments, update assignment
-            $segments = $this->segmentCollectionFactory->create()
-                ->addActiveFilter()
-                ->addRefreshModeFilter('realtime')
-                ->getItems();
-
-            foreach ($segments as $segment) {
-                $matches = $this->segmentManagement->doesCustomerMatchSegment(
-                    (int) $customer->getId(),
-                    (int) $segment->getId()
-                );
-
-                $isInSegment = $this->segmentManagement->isCustomerInSegment(
-                    (int) $customer->getId(),
-                    (int) $segment->getId()
-                );
-
-                // Add or remove based on match
-                if ($matches && !$isInSegment) {
-                    $this->segmentManagement->assignCustomerToSegment(
-                        (int) $customer->getId(),
-                        (int) $segment->getId()
-                    );
-                } elseif (!$matches && $isInSegment) {
-                    $this->segmentManagement->removeCustomerFromSegment(
-                        (int) $customer->getId(),
-                        (int) $segment->getId()
-                    );
-                }
-            }
+            $this->segmentManagement->updateCustomerMembership((int) $customer->getId());
         } catch (\Exception $e) {
             $this->logger->error('CustomerSave observer error: ' . $e->getMessage());
         }

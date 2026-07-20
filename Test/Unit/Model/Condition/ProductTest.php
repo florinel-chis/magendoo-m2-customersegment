@@ -1,41 +1,38 @@
 <?php
 /**
- * Magendoo CustomerSegment Product Condition Test
+ * Magendoo CustomerSegment - product interactions condition test
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Test\Unit\Model\Condition;
 
+use Magendoo\CustomerSegment\Model\Condition\Product;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Select;
 use Magento\Rule\Model\Condition\Context;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Magendoo\CustomerSegment\Model\Condition\Product;
 
 class ProductTest extends TestCase
 {
-    /** @var Context|MockObject */
+    /** @var Context&MockObject */
     private $context;
 
-    /** @var ResourceConnection|MockObject */
+    /** @var ResourceConnection&MockObject */
     private $resourceConnection;
 
-    /** @var AdapterInterface|MockObject */
+    /** @var AdapterInterface&MockObject */
     private $connection;
 
-    /** @var Select|MockObject */
+    /** @var Select&MockObject */
     private $select;
 
-    /** @var Product */
-    private $product;
+    private Product $product;
 
     protected function setUp(): void
     {
@@ -51,19 +48,18 @@ class ProductTest extends TestCase
     }
 
     /**
-     * Helper to reduce DB mock boilerplate
-     * @param mixed $fetchResult
+     * Wire the connection and a fully-fluent Select mock. Fetch results are set per test.
      */
-    private function setupDbMock(mixed $fetchResult): void
+    private function stubConnection(): void
     {
         $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturnCallback(fn($table) => $table);
+        $this->resourceConnection->method('getTableName')->willReturnCallback(fn ($table) => $table);
         $this->connection->method('select')->willReturn($this->select);
-        $this->connection->method('fetchOne')->willReturn($fetchResult);
+        $this->connection->method('quoteInto')->willReturnCallback(fn ($t, $v) => str_replace('?', "'" . $v . "'", $t));
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('join')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
+        foreach (['from', 'join', 'where', 'columns', 'distinct'] as $method) {
+            $this->select->method($method)->willReturnSelf();
+        }
     }
 
     public function testLoadAttributeOptionsSetsExpectedAttributes(): void
@@ -72,11 +68,11 @@ class ProductTest extends TestCase
         $this->assertSame($this->product, $result);
 
         $options = $this->product->getAttributeOption();
-        $this->assertIsArray($options);
-        $this->assertArrayHasKey('viewed_categories', $options);
-        $this->assertArrayHasKey('purchased_products', $options);
-        $this->assertArrayHasKey('purchased_categories', $options);
-        $this->assertArrayHasKey('wishlist_items_count', $options);
+        foreach (['purchased_products', 'purchased_categories', 'wishlist_items_count'] as $key) {
+            $this->assertArrayHasKey($key, $options);
+        }
+        // viewed_categories was a doc-only stub feature that the refactor dropped.
+        $this->assertArrayNotHasKey('viewed_categories', $options);
     }
 
     public function testGetInputTypeReturnsNumericForWishlistItemsCount(): void
@@ -96,10 +92,9 @@ class ProductTest extends TestCase
         $this->product->setAttribute('wishlist_items_count');
         $operators = $this->product->getDefaultOperatorOptions();
 
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('>', $operators);
-        $this->assertArrayHasKey('<', $operators);
+        foreach (['==', '!=', '>', '<'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testGetDefaultOperatorOptionsForString(): void
@@ -107,64 +102,101 @@ class ProductTest extends TestCase
         $this->product->setAttribute('purchased_products');
         $operators = $this->product->getDefaultOperatorOptions();
 
+        foreach (['==', '!=', '{}', '!{}'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
+    }
+
+    public function testGetDefaultOperatorOptionsForCategories(): void
+    {
+        $this->product->setAttribute('purchased_categories');
+        $operators = $this->product->getDefaultOperatorOptions();
+
         $this->assertArrayHasKey('==', $operators);
         $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('{}', $operators);
-        $this->assertArrayHasKey('!{}', $operators);
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $result = $this->product->validate('not-a-valid-customer');
-        $this->assertFalse($result);
+        $this->assertFalse($this->product->validate('not-a-valid-customer'));
     }
 
-    public function testValidateWithWishlistItemsCount(): void
+    public function testValidateWishlistItemsCountGreaterThan(): void
     {
-        $this->setupDbMock(5); // 5 items in wishlist
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('5');
 
         $this->product->setAttribute('wishlist_items_count');
         $this->product->setOperator('>');
         $this->product->setValue(3);
 
-        $result = $this->product->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->product->validate(1));
     }
 
-    public function testValidateWithPurchasedProductsEquals(): void
+    public function testValidatePurchasedProductsEquals(): void
     {
-        $this->setupDbMock(1); // 1 product matching
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('1');
 
         $this->product->setAttribute('purchased_products');
         $this->product->setOperator('==');
         $this->product->setValue('SKU123');
 
-        $result = $this->product->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->product->validate(1));
     }
 
-    public function testValidateWithPurchasedCategories(): void
+    public function testValidatePurchasedCategoriesEquals(): void
     {
-        $this->setupDbMock(2); // 2 products from category
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('2');
 
         $this->product->setAttribute('purchased_categories');
         $this->product->setOperator('==');
         $this->product->setValue('10,20');
 
-        $result = $this->product->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->product->validate(1));
     }
 
-    public function testValidateReturnsFalseWhenNoMatch(): void
+    public function testValidatePurchasedProductsEqualsNoMatch(): void
     {
-        $this->setupDbMock(0); // No products matching
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('0');
 
         $this->product->setAttribute('purchased_products');
         $this->product->setOperator('==');
         $this->product->setValue('NONEXISTENT');
 
-        $result = $this->product->validate(1);
-        $this->assertFalse($result);
+        $this->assertFalse($this->product->validate(1));
+    }
+
+    /**
+     * "did NOT purchase X" is TRUE when the customer has no matching purchase (customer-level negation).
+     */
+    public function testValidatePurchasedProductsNotEqualsTrueWhenAbsent(): void
+    {
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('0');
+
+        $this->product->setAttribute('purchased_products');
+        $this->product->setOperator('!=');
+        $this->product->setValue('SKU123');
+
+        $this->assertTrue($this->product->validate(1));
+    }
+
+    /**
+     * "did NOT purchase X" is FALSE when the customer DID purchase it.
+     */
+    public function testValidatePurchasedProductsNotEqualsFalseWhenPresent(): void
+    {
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('3');
+
+        $this->product->setAttribute('purchased_products');
+        $this->product->setOperator('!=');
+        $this->product->setValue('SKU123');
+
+        $this->assertFalse($this->product->validate(1));
     }
 
     public function testValidateWithCustomerObject(): void
@@ -172,13 +204,55 @@ class ProductTest extends TestCase
         $customerModel = $this->createMock(\Magento\Customer\Model\Customer::class);
         $customerModel->method('getId')->willReturn(1);
 
-        $this->setupDbMock(3);
+        $this->stubConnection();
+        $this->connection->method('fetchOne')->willReturn('3');
 
         $this->product->setAttribute('wishlist_items_count');
         $this->product->setOperator('==');
         $this->product->setValue(3);
 
-        $result = $this->product->validate($customerModel);
-        $this->assertTrue($result);
+        $this->assertTrue($this->product->validate($customerModel));
+    }
+
+    public function testGetMatchingCustomerIdsResolvesPurchasedProducts(): void
+    {
+        $this->stubConnection();
+        $this->connection->method('fetchCol')->willReturn(['2', '6']);
+
+        $this->product->setAttribute('purchased_products');
+        $this->product->setOperator('==');
+        $this->product->setValue('SKU123');
+
+        $this->assertSame([2, 6], $this->product->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsResolvesPurchasedCategories(): void
+    {
+        $this->stubConnection();
+        $this->connection->method('fetchCol')->willReturn(['11']);
+
+        $this->product->setAttribute('purchased_categories');
+        $this->product->setOperator('==');
+        $this->product->setValue('10,20');
+
+        $this->assertSame([11], $this->product->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForNegativeOperator(): void
+    {
+        $this->product->setAttribute('purchased_products');
+        $this->product->setOperator('!=');
+        $this->product->setValue('SKU123');
+
+        $this->assertNull($this->product->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForWishlist(): void
+    {
+        $this->product->setAttribute('wishlist_items_count');
+        $this->product->setOperator('>');
+        $this->product->setValue(1);
+
+        $this->assertNull($this->product->getMatchingCustomerIds());
     }
 }

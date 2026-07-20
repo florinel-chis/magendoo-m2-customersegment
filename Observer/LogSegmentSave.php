@@ -1,48 +1,46 @@
 <?php
 /**
- * Magendoo CustomerSegment Log Segment Save Observer
+ * Magendoo CustomerSegment - Activity log on segment save
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Observer;
 
+use Magendoo\CustomerSegment\Model\ResourceModel\Log as LogResource;
+use Magendoo\CustomerSegment\Model\Segment;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
-use Magento\Framework\Stdlib\DateTime\DateTime;
-use Magendoo\CustomerSegment\Model\Segment;
 use Psr\Log\LoggerInterface;
 
 /**
- * Observer to log segment save
+ * Writes an activity-log row whenever a segment is created or updated.
  */
 class LogSegmentSave implements ObserverInterface
 {
     /**
+     * @var LogResource
+     */
+    private LogResource $logResource;
+
+    /**
      * @var LoggerInterface
      */
-    protected LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /**
-     * @var DateTime
-     */
-    protected DateTime $dateTime;
-
-    /**
+     * @param LogResource $logResource
      * @param LoggerInterface $logger
-     * @param DateTime $dateTime
      */
     public function __construct(
-        LoggerInterface $logger,
-        DateTime $dateTime
+        LogResource $logResource,
+        LoggerInterface $logger
     ) {
+        $this->logResource = $logResource;
         $this->logger = $logger;
-        $this->dateTime = $dateTime;
     }
 
     /**
@@ -53,27 +51,25 @@ class LogSegmentSave implements ObserverInterface
      */
     public function execute(Observer $observer): void
     {
-        /** @var Segment $segment */
+        /** @var Segment|null $segment */
         $segment = $observer->getEvent()->getSegment();
-        
-        if (!$segment) {
+
+        if (!$segment || !$segment->getId()) {
             return;
         }
 
         $action = $segment->isObjectNew() ? 'created' : 'updated';
-        
-        $this->logger->info(
-            sprintf('Segment %s: ID=%d, Name=%s', 
-                $action,
-                $segment->getId(),
-                $segment->getName()
-            ),
-            [
-                'segment_id' => $segment->getId(),
-                'name' => $segment->getName(),
-                'is_active' => $segment->getIsActive(),
-                'timestamp' => $this->dateTime->gmtDate()
-            ]
+        $details = sprintf(
+            'Segment "%s" %s (active: %s)',
+            (string) $segment->getName(),
+            $action,
+            $segment->getIsActive() ? 'yes' : 'no'
         );
+
+        try {
+            $this->logResource->log((int) $segment->getId(), $action, $details);
+        } catch (\Exception $e) {
+            $this->logger->error('LogSegmentSave observer error: ' . $e->getMessage());
+        }
     }
 }

@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Actions Column
+ * Magendoo CustomerSegment - segment grid actions column
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -72,6 +70,7 @@ class Actions extends Column
                         ),
                         'label' => __('Refresh'),
                         'hidden' => false,
+                        'post' => true,
                         'confirm' => [
                             'title' => __('Refresh Segment'),
                             'message' => __('Are you sure you want to refresh this segment?')
@@ -84,6 +83,7 @@ class Actions extends Column
                         ),
                         'label' => __('Delete'),
                         'hidden' => false,
+                        'post' => true,
                         'confirm' => [
                             'title' => __('Delete Segment'),
                             'message' => __('Are you sure you want to delete this segment?')

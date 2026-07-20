@@ -1,99 +1,79 @@
 <?php
 /**
- * Magendoo CustomerSegment Cart Condition Test
+ * Magendoo CustomerSegment - shopping cart condition test
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Test\Unit\Model\Condition;
 
-use Magento\Checkout\Model\Session as CheckoutSession;
+use Magendoo\CustomerSegment\Model\Condition\Cart;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Select;
-use Magento\Quote\Model\ResourceModel\Quote\CollectionFactory as QuoteCollectionFactory;
 use Magento\Rule\Model\Condition\Context;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Magendoo\CustomerSegment\Model\Condition\Cart;
 
 class CartTest extends TestCase
 {
-    /** @var Context|MockObject */
+    /** @var Context&MockObject */
     private $context;
 
-    /** @var QuoteCollectionFactory|MockObject */
-    private $quoteCollectionFactory;
-
-    /** @var ResourceConnection|MockObject */
+    /** @var ResourceConnection&MockObject */
     private $resourceConnection;
 
-    /** @var CheckoutSession|MockObject */
-    private $checkoutSession;
-
-    /** @var AdapterInterface|MockObject */
+    /** @var AdapterInterface&MockObject */
     private $connection;
 
-    /** @var Select|MockObject */
+    /** @var Select&MockObject */
     private $select;
 
-    /** @var Cart */
-    private $cart;
+    private Cart $cart;
 
     protected function setUp(): void
     {
         $this->context = $this->createMock(Context::class);
-        $this->quoteCollectionFactory = $this->createMock(QuoteCollectionFactory::class);
         $this->resourceConnection = $this->createMock(ResourceConnection::class);
-        $this->checkoutSession = $this->createMock(CheckoutSession::class);
         $this->connection = $this->createMock(AdapterInterface::class);
         $this->select = $this->createMock(Select::class);
-        
-        // Create SUT once in setUp
+
         $this->cart = new Cart(
             $this->context,
-            $this->quoteCollectionFactory,
-            $this->resourceConnection,
-            [],
-            $this->checkoutSession
+            $this->resourceConnection
         );
     }
 
     /**
-     * Helper to reduce DB mock boilerplate duplication
+     * Wire the connection, a fluent Select mock, and (optionally) the active-quote row and its SKUs.
      */
-    private function setupDbMock(array $fetchRowResult, array $fetchColResult = []): void
+    private function stubConnection(array $fetchRowResult = [], array $fetchColResult = []): void
     {
         $this->resourceConnection->method('getConnection')->willReturn($this->connection);
-        $this->resourceConnection->method('getTableName')->willReturnCallback(fn($table) => $table);
+        $this->resourceConnection->method('getTableName')->willReturnCallback(fn ($table) => $table);
         $this->connection->method('select')->willReturn($this->select);
         $this->connection->method('fetchRow')->willReturn($fetchRowResult);
         $this->connection->method('fetchCol')->willReturn($fetchColResult);
 
-        $this->select->method('from')->willReturnSelf();
-        $this->select->method('columns')->willReturnSelf();
-        $this->select->method('where')->willReturnSelf();
-        $this->select->method('order')->willReturnSelf();
-        $this->select->method('limit')->willReturnSelf();
+        foreach (['from', 'columns', 'where', 'order', 'limit', 'distinct', 'join'] as $method) {
+            $this->select->method($method)->willReturnSelf();
+        }
     }
 
     public function testLoadAttributeOptionsSetsExpectedAttributes(): void
     {
         $result = $this->cart->loadAttributeOptions();
         $this->assertSame($this->cart, $result);
-        
+
         $options = $this->cart->getAttributeOption();
-        $this->assertIsArray($options);
-        $this->assertArrayHasKey('cart_subtotal', $options);
-        $this->assertArrayHasKey('cart_items_count', $options);
-        $this->assertArrayHasKey('cart_products', $options);
-        $this->assertArrayHasKey('has_active_cart', $options);
-        $this->assertArrayHasKey('cart_last_activity', $options);
+        foreach (
+            ['cart_subtotal', 'cart_items_count', 'cart_products', 'has_active_cart', 'cart_last_activity'] as $key
+        ) {
+            $this->assertArrayHasKey($key, $options);
+        }
     }
 
     public function testGetInputTypeReturnsPriceForCartSubtotal(): void
@@ -142,8 +122,7 @@ class CartTest extends TestCase
     {
         $this->cart->setAttribute('has_active_cart');
         $options = $this->cart->getValueSelectOptions();
-        
-        $this->assertIsArray($options);
+
         $this->assertCount(2, $options);
         $this->assertEquals('1', $options[0]['value']);
         $this->assertEquals('0', $options[1]['value']);
@@ -152,17 +131,14 @@ class CartTest extends TestCase
     public function testGetValueSelectOptionsReturnsEmptyForOtherAttributes(): void
     {
         $this->cart->setAttribute('cart_subtotal');
-        $options = $this->cart->getValueSelectOptions();
-        
-        $this->assertIsArray($options);
-        $this->assertEmpty($options);
+        $this->assertEmpty($this->cart->getValueSelectOptions());
     }
 
     public function testGetDefaultOperatorOptionsForHasActiveCart(): void
     {
         $this->cart->setAttribute('has_active_cart');
         $operators = $this->cart->getDefaultOperatorOptions();
-        
+
         $this->assertArrayHasKey('==', $operators);
         $this->assertCount(1, $operators);
     }
@@ -171,38 +147,34 @@ class CartTest extends TestCase
     {
         $this->cart->setAttribute('cart_items_count');
         $operators = $this->cart->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('>', $operators);
-        $this->assertArrayHasKey('<', $operators);
+
+        foreach (['==', '>', '<'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
-    public function testGetDefaultOperatorOptionsForDefault(): void
+    public function testGetDefaultOperatorOptionsForProducts(): void
     {
         $this->cart->setAttribute('cart_products');
         $operators = $this->cart->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('{}', $operators);
-        $this->assertArrayHasKey('!{}', $operators);
+
+        foreach (['==', '!=', '{}', '!{}'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
-    public function testValidateWithNumericCustomerId(): void
+    public function testValidateSubtotalGreaterThan(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'subtotal' => 100.00,
-            'items_count' => 2,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ], ['SKU123']);
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 100.00, 'items_count' => 2, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU123']
+        );
 
         $this->cart->setAttribute('cart_subtotal');
         $this->cart->setOperator('>');
         $this->cart->setValue(50);
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate(1));
     }
 
     public function testValidateWithCustomerObject(): void
@@ -210,113 +182,144 @@ class CartTest extends TestCase
         $customerModel = $this->createMock(\Magento\Customer\Model\Customer::class);
         $customerModel->method('getId')->willReturn(1);
 
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'subtotal' => 150.00,
-        ], []);
+        $this->stubConnection(['entity_id' => 1, 'subtotal' => 150.00, 'items_count' => 1], []);
 
         $this->cart->setAttribute('cart_subtotal');
         $this->cart->setOperator('>=');
         $this->cart->setValue(100);
 
-        $result = $this->cart->validate($customerModel);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate($customerModel));
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $result = $this->cart->validate('not-a-valid-customer');
-        $this->assertFalse($result);
+        $this->assertFalse($this->cart->validate('not-a-valid-customer'));
     }
 
-    public function testValidateWithHasActiveCartYes(): void
+    public function testValidateHasActiveCartYes(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'subtotal' => 50.00,
-            'items_count' => 1,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ], ['SKU1']);
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 50.00, 'items_count' => 1, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU1']
+        );
 
         $this->cart->setAttribute('has_active_cart');
         $this->cart->setOperator('==');
         $this->cart->setValue('1');
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate(1));
     }
 
-    public function testValidateWithHasActiveCartNo(): void
+    public function testValidateHasActiveCartNoWhenNoQuote(): void
     {
-        $this->setupDbMock([], []);
+        $this->stubConnection([], []);
 
         $this->cart->setAttribute('has_active_cart');
         $this->cart->setOperator('==');
         $this->cart->setValue('0');
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate(1));
     }
 
-    public function testValidateWithCartProductsContains(): void
+    public function testValidateCartProductsContains(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'subtotal' => 100.00,
-            'items_count' => 2,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ], ['SKU123', 'ABC456']);
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 100.00, 'items_count' => 2, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU123', 'ABC456']
+        );
 
         $this->cart->setAttribute('cart_products');
         $this->cart->setOperator('{}');
         $this->cart->setValue('SKU');
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate(1));
     }
 
-    public function testValidateReturnsFalseWhenProductNotFound(): void
+    public function testValidateCartProductsEqualsNotFound(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'subtotal' => 100.00,
-        ], ['SKU123']);
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 100.00, 'items_count' => 1, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU123']
+        );
 
         $this->cart->setAttribute('cart_products');
         $this->cart->setOperator('==');
         $this->cart->setValue('NOTFOUND');
 
-        $result = $this->cart->validate(1);
-        $this->assertFalse($result);
+        $this->assertFalse($this->cart->validate(1));
     }
 
-    public function testValidateWithCartItemsCount(): void
+    /**
+     * "does not contain X" is TRUE when no cart line matches (negation at the cart level).
+     */
+    public function testValidateCartProductsDoesNotContainIsTrueWhenAbsent(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'items_count' => 5,
-        ], []);
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 100.00, 'items_count' => 1, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU123']
+        );
+
+        $this->cart->setAttribute('cart_products');
+        $this->cart->setOperator('!{}');
+        $this->cart->setValue('ZZZ');
+
+        $this->assertTrue($this->cart->validate(1));
+    }
+
+    /**
+     * "does not contain X" is FALSE when a line DOES match.
+     */
+    public function testValidateCartProductsDoesNotContainIsFalseWhenPresent(): void
+    {
+        $this->stubConnection(
+            ['entity_id' => 1, 'subtotal' => 100.00, 'items_count' => 1, 'updated_at' => '2026-07-20 00:00:00'],
+            ['SKU123']
+        );
+
+        $this->cart->setAttribute('cart_products');
+        $this->cart->setOperator('!{}');
+        $this->cart->setValue('SKU');
+
+        $this->assertFalse($this->cart->validate(1));
+    }
+
+    public function testValidateCartItemsCount(): void
+    {
+        $this->stubConnection(['entity_id' => 1, 'items_count' => 5], []);
 
         $this->cart->setAttribute('cart_items_count');
         $this->cart->setOperator('>');
         $this->cart->setValue(3);
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->cart->validate(1));
     }
 
-    public function testValidateWithCartLastActivity(): void
+    public function testGetMatchingCustomerIdsResolvesHasActiveCartYes(): void
     {
-        $this->setupDbMock([
-            'entity_id' => 1,
-            'updated_at' => date('Y-m-d H:i:s', strtotime('-5 days')),
-        ], []);
+        $this->stubConnection([], ['4', '8', '15']);
 
-        $this->cart->setAttribute('cart_last_activity');
-        $this->cart->setOperator('<');
+        $this->cart->setAttribute('has_active_cart');
+        $this->cart->setOperator('==');
+        $this->cart->setValue('1');
+
+        $this->assertSame([4, 8, 15], $this->cart->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForHasActiveCartNo(): void
+    {
+        $this->cart->setAttribute('has_active_cart');
+        $this->cart->setOperator('==');
+        $this->cart->setValue('0');
+
+        $this->assertNull($this->cart->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullForNonResolvableAttribute(): void
+    {
+        $this->cart->setAttribute('cart_subtotal');
+        $this->cart->setOperator('>');
         $this->cart->setValue(10);
 
-        $result = $this->cart->validate(1);
-        $this->assertTrue($result);
+        $this->assertNull($this->cart->getMatchingCustomerIds());
     }
 }

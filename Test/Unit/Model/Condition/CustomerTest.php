@@ -1,17 +1,16 @@
 <?php
 /**
- * Magendoo CustomerSegment Customer Condition Test
+ * Magendoo CustomerSegment - customer attribute condition test
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
 
 namespace Magendoo\CustomerSegment\Test\Unit\Model\Condition;
 
+use Magendoo\CustomerSegment\Model\Condition\Customer;
 use Magento\Customer\Model\ResourceModel\Customer\Collection as CustomerCollection;
 use Magento\Customer\Model\ResourceModel\Customer\CollectionFactory as CustomerCollectionFactory;
 use Magento\Eav\Model\Config as EavConfig;
@@ -22,24 +21,22 @@ use Magento\Store\Model\StoreManagerInterface;
 use Magento\Store\Model\Website;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Magendoo\CustomerSegment\Model\Condition\Customer;
 
 class CustomerTest extends TestCase
 {
-    /** @var Context|MockObject */
+    /** @var Context&MockObject */
     private $context;
 
-    /** @var CustomerCollectionFactory|MockObject */
+    /** @var CustomerCollectionFactory&MockObject */
     private $customerCollectionFactory;
 
-    /** @var StoreManagerInterface|MockObject */
+    /** @var StoreManagerInterface&MockObject */
     private $storeManager;
 
-    /** @var EavConfig|MockObject */
+    /** @var EavConfig&MockObject */
     private $eavConfig;
 
-    /** @var Customer */
-    private $customer;
+    private Customer $customer;
 
     protected function setUp(): void
     {
@@ -47,8 +44,7 @@ class CustomerTest extends TestCase
         $this->customerCollectionFactory = $this->createMock(CustomerCollectionFactory::class);
         $this->storeManager = $this->createMock(StoreManagerInterface::class);
         $this->eavConfig = $this->createMock(EavConfig::class);
-        
-        // Create SUT once in setUp to eliminate duplication
+
         $this->customer = new Customer(
             $this->context,
             $this->customerCollectionFactory,
@@ -61,19 +57,17 @@ class CustomerTest extends TestCase
     {
         $result = $this->customer->loadAttributeOptions();
         $this->assertSame($this->customer, $result);
-        
+
         $options = $this->customer->getAttributeOption();
         $this->assertIsArray($options);
-        $this->assertArrayHasKey('email', $options);
-        $this->assertArrayHasKey('firstname', $options);
-        $this->assertArrayHasKey('lastname', $options);
-        $this->assertArrayHasKey('dob', $options);
-        $this->assertArrayHasKey('gender', $options);
-        $this->assertArrayHasKey('taxvat', $options);
-        $this->assertArrayHasKey('website_id', $options);
-        $this->assertArrayHasKey('store_id', $options);
-        $this->assertArrayHasKey('group_id', $options);
-        $this->assertArrayHasKey('created_at', $options);
+        foreach (
+            [
+                'email', 'firstname', 'lastname', 'dob', 'gender',
+                'taxvat', 'website_id', 'store_id', 'group_id', 'created_at',
+            ] as $key
+        ) {
+            $this->assertArrayHasKey($key, $options);
+        }
     }
 
     public function testGetInputTypeReturnsDateForDob(): void
@@ -140,8 +134,7 @@ class CustomerTest extends TestCase
 
         $this->customer->setAttribute('website_id');
         $options = $this->customer->getValueSelectOptions();
-        
-        $this->assertIsArray($options);
+
         $this->assertCount(1, $options);
         $this->assertEquals(1, $options[0]['value']);
         $this->assertEquals('Main Website', $options[0]['label']);
@@ -157,8 +150,7 @@ class CustomerTest extends TestCase
 
         $this->customer->setAttribute('store_id');
         $options = $this->customer->getValueSelectOptions();
-        
-        $this->assertIsArray($options);
+
         $this->assertCount(1, $options);
         $this->assertEquals(1, $options[0]['value']);
         $this->assertEquals('Default Store', $options[0]['label']);
@@ -168,7 +160,7 @@ class CustomerTest extends TestCase
     {
         $this->customer->setAttribute('email');
         $options = $this->customer->getValueSelectOptions();
-        
+
         $this->assertIsArray($options);
         $this->assertEmpty($options);
     }
@@ -177,43 +169,35 @@ class CustomerTest extends TestCase
     {
         $this->customer->setAttribute('dob');
         $operators = $this->customer->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('>', $operators);
-        $this->assertArrayHasKey('<', $operators);
-        $this->assertArrayHasKey('>=', $operators);
-        $this->assertArrayHasKey('<=', $operators);
+
+        foreach (['==', '!=', '>', '<', '>=', '<='] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testGetDefaultOperatorOptionsForSelect(): void
     {
         $this->customer->setAttribute('website_id');
         $operators = $this->customer->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('()', $operators);
-        $this->assertArrayHasKey('!()', $operators);
+
+        foreach (['==', '!=', '()', '!()'] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testGetDefaultOperatorOptionsForString(): void
     {
         $this->customer->setAttribute('email');
         $operators = $this->customer->getDefaultOperatorOptions();
-        
-        $this->assertArrayHasKey('==', $operators);
-        $this->assertArrayHasKey('!=', $operators);
-        $this->assertArrayHasKey('{}', $operators);
-        $this->assertArrayHasKey('!{}', $operators);
-        $this->assertArrayHasKey('^=', $operators);
-        $this->assertArrayHasKey('$=', $operators);
+
+        foreach (['==', '!=', '{}', '!{}', '^=', '$='] as $op) {
+            $this->assertArrayHasKey($op, $operators);
+        }
     }
 
     public function testValidateWithNumericCustomerId(): void
     {
         $collection = $this->createMock(CustomerCollection::class);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
         $collection->method('addAttributeToFilter')->willReturnSelf();
         $collection->method('getSize')->willReturn(1);
 
@@ -223,8 +207,7 @@ class CustomerTest extends TestCase
         $this->customer->setOperator('==');
         $this->customer->setValue('test@example.com');
 
-        $result = $this->customer->validate(1);
-        $this->assertTrue($result);
+        $this->assertTrue($this->customer->validate(1));
     }
 
     public function testValidateWithCustomerObject(): void
@@ -233,7 +216,6 @@ class CustomerTest extends TestCase
         $customerModel->method('getId')->willReturn(1);
 
         $collection = $this->createMock(CustomerCollection::class);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
         $collection->method('addAttributeToFilter')->willReturnSelf();
         $collection->method('getSize')->willReturn(1);
 
@@ -243,20 +225,26 @@ class CustomerTest extends TestCase
         $this->customer->setOperator('==');
         $this->customer->setValue('test@example.com');
 
-        $result = $this->customer->validate($customerModel);
-        $this->assertTrue($result);
+        $this->assertTrue($this->customer->validate($customerModel));
     }
 
     public function testValidateReturnsFalseForInvalidInput(): void
     {
-        $result = $this->customer->validate('not-a-valid-customer');
-        $this->assertFalse($result);
+        $this->assertFalse($this->customer->validate('not-a-valid-customer'));
+    }
+
+    public function testValidateReturnsFalseWhenAttributeMissing(): void
+    {
+        // No attribute set -> filter cannot be built -> validate short-circuits to false.
+        $this->customer->setOperator('==');
+        $this->customer->setValue('x');
+
+        $this->assertFalse($this->customer->validate(1));
     }
 
     public function testValidateReturnsFalseWhenNoMatch(): void
     {
         $collection = $this->createMock(CustomerCollection::class);
-        $collection->method('addAttributeToSelect')->willReturnSelf();
         $collection->method('addAttributeToFilter')->willReturnSelf();
         $collection->method('getSize')->willReturn(0);
 
@@ -266,18 +254,41 @@ class CustomerTest extends TestCase
         $this->customer->setOperator('==');
         $this->customer->setValue('nonexistent@example.com');
 
-        $result = $this->customer->validate(1);
-        $this->assertFalse($result);
+        $this->assertFalse($this->customer->validate(1));
     }
 
-    public function testValidateHandlesEavException(): void
+    public function testGetValueSelectOptionsSwallowsEavException(): void
     {
-        $this->eavConfig->method('getEntityType')
+        $this->eavConfig->method('getAttribute')
             ->willThrowException(new LocalizedException(__('EAV Error')));
 
-        // Should not throw exception
         $this->customer->setAttribute('group_id');
         $options = $this->customer->getValueSelectOptions();
+
         $this->assertIsArray($options);
+        $this->assertEmpty($options);
+    }
+
+    public function testGetMatchingCustomerIdsReturnsNullWhenAttributeMissing(): void
+    {
+        $this->customer->setOperator('==');
+        $this->customer->setValue('x');
+
+        $this->assertNull($this->customer->getMatchingCustomerIds());
+    }
+
+    public function testGetMatchingCustomerIdsReturnsResolvedIntIds(): void
+    {
+        $collection = $this->createMock(CustomerCollection::class);
+        $collection->method('addAttributeToFilter')->willReturnSelf();
+        $collection->method('getAllIds')->willReturn(['1', '2', '5']);
+
+        $this->customerCollectionFactory->method('create')->willReturn($collection);
+
+        $this->customer->setAttribute('email');
+        $this->customer->setOperator('{}');
+        $this->customer->setValue('example.com');
+
+        $this->assertSame([1, 2, 5], $this->customer->getMatchingCustomerIds());
     }
 }

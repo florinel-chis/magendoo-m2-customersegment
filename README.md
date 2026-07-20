@@ -20,7 +20,6 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 | [Developer Documentation](docs/DEVELOPER.md) | Technical documentation for developers |
 | [API Documentation](docs/API_DOCUMENTATION.md) | REST API reference and examples |
 | [Testing Guide](TESTING.md) | Unit testing patterns and best practices |
-| [Testing Lessons](TESTING_LESSONS.md) | Implementation lessons and bug analysis |
 | [Changelog](CHANGELOG.md) | Version history and changes |
 
 ## Features
@@ -58,10 +57,11 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 - Days Since Cart Activity
 
 #### Product Interactions
-- Viewed Categories
 - Purchased Products (SKU)
 - Purchased from Categories
 - Wishlist Items Count
+
+> Viewed-categories (product-view) segmentation is on the [roadmap](CHANGELOG.md#roadmap-not-yet-implemented) and not yet available.
 
 ### Admin Features
 - Grid view of all segments with customer counts
@@ -76,14 +76,16 @@ A comprehensive Customer Segmentation module for Magento 2 Community Edition tha
 - REST API for segment management
 - CLI commands for segment operations
 - Integration with Cart Price Rules
-- Customer grid segment filtering
 - Segment indexer with mview support
 
 ## Installation
 
 ### Via Composer (Recommended)
 
+This package is not on Packagist yet, so register the repository first:
+
 ```bash
+composer config repositories.magendoo-customer-segment vcs https://github.com/florinel-chis/magendoo-m2-customersegment
 composer require magendoo/module-customer-segment
 bin/magento setup:upgrade
 bin/magento setup:di:compile
@@ -105,10 +107,9 @@ bin/magento cache:flush
 
 ## Configuration
 
-Access the configuration at:
-```
-Admin → Customers → Customer Segments
-```
+- **Segment grid** (create/edit/refresh segments): **Customers → Customer Segments**
+- **Module settings** (enable/disable, default refresh mode, cron schedule):
+  **Stores → Configuration → Customers → Customer Segments**
 
 ## Usage
 
@@ -130,8 +131,8 @@ Admin → Customers → Customer Segments
 | Mode | Description |
 |------|-------------|
 | **Manual** | Admin must click refresh button to update |
-| **Cron** | Updated automatically on cron schedule (default: daily at 2 AM) |
-| **Real-time** | Updated on customer events (login, order, etc.) |
+| **Cron** | Updated automatically on cron schedule (default: `*/5 * * * *`, every 5 minutes) |
+| **Real-time** | Updated on customer events (register, save, login, order, quote merge) |
 
 ### CLI Commands
 
@@ -164,10 +165,14 @@ bin/magento magendoo:customer-segment:refresh 1 --export --format=csv
 | GET | `/V1/customer-segments` | List all segments |
 | GET | `/V1/customer-segments/:segmentId` | Get segment by ID |
 | POST | `/V1/customer-segments` | Create new segment |
-| PUT | `/V1/customer-segments/:segmentId` | Update segment |
+| PUT | `/V1/customer-segments/:segmentId` | Update segment (partial updates merge onto the stored record) |
 | DELETE | `/V1/customer-segments/:segmentId` | Delete segment |
-| POST | `/V1/customer-segments/:segmentId/refresh` | Refresh segment |
-| GET | `/V1/customers/:customerId/segments` | Get customer's segments |
+| POST | `/V1/customer-segments/:segmentId/refresh` | Refresh a single segment; returns the assigned count |
+| POST | `/V1/customer-segments/refresh-all` | Refresh all active segments |
+| GET | `/V1/customers/:customerId/segments` | Get the customer's segments |
+| GET | `/V1/customers/:customerId/segment-ids` | Get the customer's segment IDs |
+| GET | `/V1/customers/:customerId/segments/:segmentId/check` | Check if a customer is in a segment |
+| GET | `/V1/customer-segments/:segmentId/customers?format=csv\|xml` | Export a segment's customers; `format` is required and returns a CSV or XML string |
 
 ### Example: Create Segment via API
 
@@ -194,20 +199,21 @@ curl -X POST "https://your-store.com/rest/V1/customer-segments" \
 |-------|-------------|
 | `magendoo_customer_segment` | Stores segment definitions |
 | `magendoo_customer_segment_customer` | Customer-segment relationships |
-| `magendoo_customer_segment_log` | Segment activity log |
+| `magendoo_customer_segment_log` | Segment activity log (save/refresh actions) |
 
 ## Events
 
 The module dispatches the following events:
 
-| Event | Description |
-|-------|-------------|
-| `magendoo_customersegment_segment_save_before` | Before segment save |
-| `magendoo_customersegment_segment_save_after` | After segment save |
-| `magendoo_customersegment_segment_refresh_before` | Before segment refresh |
-| `magendoo_customersegment_segment_refresh_after` | After segment refresh |
-| `magendoo_customersegment_customer_assigned` | Customer assigned to segment |
-| `magendoo_customersegment_customer_removed` | Customer removed from segment |
+| Event | Payload keys | Description |
+|-------|--------------|-------------|
+| `magendoo_customersegment_segment_save_before` | `segment` | Before a segment model is saved |
+| `magendoo_customersegment_segment_save_after` | `segment` | After a segment model is saved |
+| `magendoo_customersegment_refresh_before` | `segment`, `segment_id` | Before a segment refresh |
+| `magendoo_customersegment_refresh_after` | `segment`, `segment_id`, `assigned_customers`, `assigned_count` | After a segment refresh |
+| `magendoo_customersegment_customer_assigned` | `customer_id`, `segment_id` | Customer assigned to a segment |
+| `magendoo_customersegment_customer_removed` | `customer_id`, `segment_id` | Customer removed from a segment |
+| `magendoo_customersegment_conditions` | `additional` | Register custom condition types |
 
 ## Extension Points
 
@@ -242,9 +248,9 @@ class AddCustomConditionPlugin
 3. Test with CLI: `bin/magento magendoo:customer-segment:refresh --all`
 
 ### Performance issues
-1. Enable batch processing (already enabled by default)
-2. Use Manual refresh mode for large segments
-3. Schedule refresh during low-traffic hours
+1. Prefer conditions that resolve set-based (a single query) over ones that fall back to per-customer validation
+2. Use Manual or Cron refresh mode for large segments rather than Real-time
+3. Schedule cron refresh during low-traffic hours
 
 ## Testing
 
@@ -263,23 +269,17 @@ vendor/bin/phpunit --filter Magendoo --coverage-html coverage app/code/Magendoo/
 
 ### Test Coverage
 
-| Component | Tests | Assertions |
-|-----------|-------|------------|
-| SegmentManagement | 31 | 65 |
-| Condition\Combine | 10 | 13 |
-| Condition\Customer | 21 | 52 |
-| Condition\Order | 22 | 40 |
-| Condition\Cart | 22 | 38 |
-| **Total** | **106** | **198** |
+<!-- TODO: refresh exact test/assertion counts after the PHPUnit 12 test migration. -->
+
+The unit suite covers `SegmentManagement` and every condition type (`Combine`, `Customer`, `Order`,
+`Cart`, `Product`) plus set-based matching. Tests target PHPUnit 12.
 
 ### Security Tested
 
-- ✅ CSV Injection Prevention (fputcsv)
-- ✅ Formula Injection Protection
-- ✅ Condition Type Allowlist
-- ✅ Arbitrary Class Instantiation Prevention
+- ✅ CSV export neutralizes leading formula characters (`=`, `+`, `-`, `@`, tab, CR) to prevent spreadsheet formula injection
+- ✅ Condition type allowlist prevents arbitrary class instantiation
 
-See [TESTING.md](TESTING.md) and [TESTING_LESSONS.md](TESTING_LESSONS.md) for detailed testing documentation.
+See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Support
 
@@ -289,8 +289,7 @@ For support and questions:
 
 ## License
 
-This module is licensed under the Open Software License v. 3.0 (OSL-3.0).
-See LICENSE.txt for details.
+This module is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Credits
 
@@ -298,6 +297,6 @@ Developed by Magendoo (https://magendoo.com)
 
 ---
 
-**Version**: 1.0.1  
+**Version**: 2.0.0  
 **Compatibility**: Magento 2.4.x  
 **PHP Version**: 8.1+

@@ -1,11 +1,9 @@
 <?php
 /**
- * Magendoo CustomerSegment Segment Resource Model
+ * Magendoo CustomerSegment - Segment resource model (atomic membership, UTC writes)
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 
 declare(strict_types=1);
@@ -31,6 +29,11 @@ class Segment extends AbstractDb
      * Customer segment customer relation table
      */
     public const TABLE_SEGMENT_CUSTOMER = 'magendoo_customer_segment_customer';
+
+    /**
+     * Batch size for membership inserts
+     */
+    private const INSERT_CHUNK_SIZE = 1000;
 
     /**
      * @var DateTime
@@ -78,18 +81,45 @@ class Segment extends AbstractDb
     /**
      * Get customers assigned to segment
      *
+     * A limit/offset may be supplied to page through large segments instead of
+     * loading every membership row at once. Callers that only need the size
+     * should use {@see countSegmentCustomers()} rather than counting this result.
+     *
      * @param int $segmentId
+     * @param int|null $limit
+     * @param int|null $offset
      * @return array
      * @throws LocalizedException
      */
-    public function getSegmentCustomers(int $segmentId): array
+    public function getSegmentCustomers(int $segmentId, ?int $limit = null, ?int $offset = null): array
     {
         $connection = $this->getConnection();
         $select = $connection->select()
             ->from($this->getTable(self::TABLE_SEGMENT_CUSTOMER), ['customer_id', 'assigned_at'])
             ->where('segment_id = ?', $segmentId);
 
+        if ($limit !== null) {
+            $select->limit($limit, $offset ?? 0);
+        }
+
         return $connection->fetchAll($select);
+    }
+
+    /**
+     * Count customers currently assigned to a segment
+     *
+     * @param int $segmentId
+     * @return int
+     * @throws LocalizedException
+     */
+    public function countSegmentCustomers(int $segmentId): int
+    {
+        $connection = $this->getConnection();
+        $select = $connection->select()
+            ->from($this->getTable(self::TABLE_SEGMENT_CUSTOMER), 'COUNT(*)')
+            ->where('segment_id = ?', $segmentId);
+
+        return (int) $connection->fetchOne($select);
     }
 
     /**
@@ -206,18 +236,73 @@ class Segment extends AbstractDb
      *
      * @param int $segmentId
      * @param array $customerIds
-     * @return int Number of customers assigned
+     * @return int Actual membership count for the segment after assignment
      * @throws LocalizedException
      */
     public function massAssignCustomers(int $segmentId, array $customerIds): int
     {
         if (empty($customerIds)) {
-            return 0;
+            return $this->countSegmentCustomers($segmentId);
         }
 
+        $this->insertMembershipRows($this->getConnection(), $segmentId, $customerIds);
+
+        // Return the true membership count, not the number of attempted inserts
+        // (which double-counts duplicates and pre-existing rows).
+        return $this->countSegmentCustomers($segmentId);
+    }
+
+    /**
+     * Atomically replace the whole membership of a segment
+     *
+     * Wraps the remove-all + bulk-insert in a single transaction so a refresh
+     * never leaves an empty or partial membership window.
+     *
+     * @param int $segmentId
+     * @param array $customerIds
+     * @return int Actual membership count for the segment after replacement
+     * @throws \Exception
+     */
+    public function replaceCustomers(int $segmentId, array $customerIds): int
+    {
         $connection = $this->getConnection();
-        $data = [];
+        $connection->beginTransaction();
+
+        try {
+            $connection->delete(
+                $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
+                ['segment_id = ?' => $segmentId]
+            );
+
+            if (!empty($customerIds)) {
+                $this->insertMembershipRows($connection, $segmentId, $customerIds);
+            }
+
+            $count = $this->countSegmentCustomers($segmentId);
+            $connection->commit();
+        } catch (\Exception $e) {
+            $connection->rollBack();
+            throw $e;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Insert membership rows in bounded chunks
+     *
+     * @param \Magento\Framework\DB\Adapter\AdapterInterface $connection
+     * @param int $segmentId
+     * @param array $customerIds
+     * @return void
+     */
+    private function insertMembershipRows(
+        \Magento\Framework\DB\Adapter\AdapterInterface $connection,
+        int $segmentId,
+        array $customerIds
+    ): void {
         $currentTime = $this->dateTime->gmtDate();
+        $data = [];
 
         foreach ($customerIds as $customerId) {
             $data[] = [
@@ -227,20 +312,12 @@ class Segment extends AbstractDb
             ];
         }
 
-        // Insert in chunks to avoid too large queries
-        $chunkSize = 1000;
-        $chunks = array_chunk($data, $chunkSize);
-        $totalInserted = 0;
-
-        foreach ($chunks as $chunk) {
+        foreach (array_chunk($data, self::INSERT_CHUNK_SIZE) as $chunk) {
             $connection->insertOnDuplicate(
                 $this->getTable(self::TABLE_SEGMENT_CUSTOMER),
                 $chunk,
                 ['assigned_at']
             );
-            $totalInserted += count($chunk);
         }
-
-        return $totalInserted;
     }
 }

@@ -1,25 +1,39 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Magendoo CustomerSegment Mview configuration
+ * Magendoo CustomerSegment - Materialized view (changelog) configuration
  *
- * @category  Magendoo
- * @package   Magendoo_CustomerSegment
  * @copyright Copyright (c) Magendoo (https://magendoo.com)
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License v. 3.0 (OSL-3.0)
+ * @license   https://opensource.org/licenses/MIT MIT License
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="urn:magento:framework:Mview/etc/mview.xsd">
+    <!--
+        This view is SEGMENT-scoped: the changelog holds segment_id values only.
+        A change to a segment's own definition (conditions_serialized / is_active /
+        refresh_mode / cron_expression) requires the whole segment to be re-evaluated,
+        so the indexer refreshes exactly those segment ids.
+
+        The customer_entity table is intentionally NOT subscribed here. Customer-driven
+        membership updates are handled per-customer by the realtime observers
+        (SegmentManagementInterface::updateCustomerMembership), not by this view. Adding
+        customer_entity would push customer_id values into this same changelog, which the
+        indexer would then wrongly treat as segment ids.
+
+        The self-written bookkeeping columns (customer_count, last_refreshed, updated_at)
+        are excluded from the UPDATE trigger via the Mview Subscription DI config
+        (etc/di.xml -> Magento\Framework\Mview\View\Subscription::ignoredUpdateColumnsBySubscription),
+        so the indexer's own count/timestamp writes do not re-enqueue the segment and
+        create a self-perpetuating backlog. The mview.xsd for this platform has no
+        per-column subscription element, so that exclusion lives in DI, not here.
+    -->
     <view id="customersegment_segment"
           class="Magendoo\CustomerSegment\Model\Indexer\Segment"
           group="indexer">
         <subscriptions>
             <table name="magendoo_customer_segment"
                    entity_column="segment_id"
-                   subscription_model="Magento\Framework\Mview\View\Subscription"/>
-            <table name="customer_entity"
-                   entity_column="entity_id"
                    subscription_model="Magento\Framework\Mview\View\Subscription"/>
         </subscriptions>
     </view>
