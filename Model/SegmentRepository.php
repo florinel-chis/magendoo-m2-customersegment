@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - Segment repository (partial-update-safe persistence)
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - migrate legacy serialized conditions to the canonical tree shape
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 declare(strict_types=1);

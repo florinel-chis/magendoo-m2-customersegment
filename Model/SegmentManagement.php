@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - segment matching orchestration, realtime funnel and export
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

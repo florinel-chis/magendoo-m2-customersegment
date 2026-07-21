@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - Customer segment domain model
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

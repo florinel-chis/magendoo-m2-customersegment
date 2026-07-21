@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - condition combine (aggregator)
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

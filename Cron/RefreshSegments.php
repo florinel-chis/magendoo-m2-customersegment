@@ -9,7 +9,7 @@
  * last_refreshed timestamp and now. This keeps per-segment schedules honest
  * even though the dispatcher itself only ticks on its group boundary.
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

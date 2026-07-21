@@ -6,7 +6,7 @@
  * contract (C3/C4): honour the enable gate, key on the real customer id from the
  * event, call ONLY updateCustomerMembership, and never let an exception escape.
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

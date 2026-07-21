@@ -5,7 +5,7 @@
  * Covers the enable gate (C4), per-segment since-last-run due evaluation and the
  * activity-log write on refresh (C5).
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

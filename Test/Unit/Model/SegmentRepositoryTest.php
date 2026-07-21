@@ -6,7 +6,7 @@
  * incoming DTO must never overwrite the stored value, and the server-managed
  * customer_count / last_refreshed columns can never be set through save().
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

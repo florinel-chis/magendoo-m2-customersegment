@@ -6,7 +6,7 @@
  * crontab config path that Magento's cron runner reads, so the module's
  * dispatcher honours the configured schedule.
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

@@ -5,7 +5,7 @@
  * Every id the indexer handles is a SEGMENT id (the mview changelog subscribes
  * only the segment table). These tests pin that segment-scoped contract.
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - drop legacy duplicate indexes and foreign keys
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 declare(strict_types=1);

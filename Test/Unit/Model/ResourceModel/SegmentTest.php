@@ -5,7 +5,7 @@
  * Focuses on the atomic membership replace (replaceCustomers wraps delete-all +
  * bulk insert in a single transaction) and the mass-assign / count helpers.
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - Admin segment save controller
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - Segment resource model (atomic membership, UTC writes)
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

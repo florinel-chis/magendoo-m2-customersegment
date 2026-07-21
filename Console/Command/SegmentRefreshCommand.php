@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - CLI segment refresh and export command
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

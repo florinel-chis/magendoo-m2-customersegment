@@ -2,7 +2,7 @@
 /**
  * Magendoo CustomerSegment - Realtime membership on customer login
  *
- * @copyright Copyright (c) Magendoo (https://magendoo.com)
+ * @copyright Copyright (c) Magendoo (https://magendoo.ro)
  * @license   https://opensource.org/licenses/MIT MIT License
  */
 

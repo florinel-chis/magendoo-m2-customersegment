@@ -293,7 +293,7 @@ This module is licensed under the MIT License. See [LICENSE](LICENSE) for detail
 
 ## Credits
 
-Developed by Magendoo (https://magendoo.com)
+Developed by Magendoo (https://magendoo.ro)
 
 ---
 
